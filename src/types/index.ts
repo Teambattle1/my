@@ -52,8 +52,6 @@ export interface TaskJob {
   aktiviteter_note: string | null;
   gear_note: string | null;
   transport_note: string | null;
-  location_note: string | null;
-  payment_note: string | null;
   bil_tankes: boolean | null;
   bil_oplades: boolean | null;
   bord_skaere_80: number | null;

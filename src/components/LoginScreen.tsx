@@ -43,16 +43,15 @@ export default function LoginScreen() {
             letterSpacing: '0.2em',
             color: '#ea580c',
           }}>
-            EVENTDAY
+            MY EVENTDAY
           </div>
           <div style={{
-            fontSize: '13px',
-            color: '#94a3b8',
-            marginTop: '4px',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
+            fontSize: '11px',
+            color: '#64748b',
+            marginTop: '6px',
+            letterSpacing: '0.08em',
           }}>
-            MY EVENTDAY
+            by TEAMBATTLE
           </div>
         </div>
 

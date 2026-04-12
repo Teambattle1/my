@@ -6,7 +6,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const TASK_JOB_SELECT = 'id, short_code, client_name, client_contact_name, client_contact_phone, client_contact_email, client_logo_url, client_website, agency, customer_number, customer_type, language, kun_tilbud, privat, event_date, event_end, event_time, duration_minutes, activities, activity_counts, activity_sessions, location_name, location_address, location_city, guests_count, instructors_count, assistants_count, get_in_location, get_in_time_storage, get_in_time_location, get_back_location, vehicle_id, trailer_id, lane_setup, lane_teardown, notes, task_notes, timing_note, crew_note, aktiviteter_note, gear_note, transport_note, location_note, payment_note, bil_tankes, bil_oplades, bord_skaere_80, bord_folde_180, bord_folde_240, hoeje_cafeborde, dug_180, dug_240, dug_rund_80, opgave_id, opgave_status, status, skal_evalueres, evaluation_score, evaluation_notes, payment_method, payment_amount, payment_card_fee, payment_contact, faktura_sendt, mobilepay, mobilepay_amount, mobilepay_received, mobilepay_note, kontant_amount, kontant_received, kontant_note, ub_note, kunde_kontaktet, kunde_kontaktet_dato, kunde_kontaktet_note, location_kontaktet, location_kontaktet_dato, hotel_kontaktet, hotel_kontaktet_dato, hotel_kontaktet_note, firma_info, sms_sendt';
+const TASK_JOB_SELECT = 'id, short_code, client_name, client_contact_name, client_contact_phone, client_contact_email, client_logo_url, client_website, agency, customer_number, customer_type, language, kun_tilbud, privat, event_date, event_end, event_time, duration_minutes, activities, activity_counts, activity_sessions, location_name, location_address, location_city, guests_count, instructors_count, assistants_count, get_in_location, get_in_time_storage, get_in_time_location, get_back_location, vehicle_id, trailer_id, lane_setup, lane_teardown, notes, task_notes, timing_note, crew_note, aktiviteter_note, gear_note, transport_note, bil_tankes, bil_oplades, bord_skaere_80, bord_folde_180, bord_folde_240, hoeje_cafeborde, dug_180, dug_240, dug_rund_80, opgave_id, opgave_status, status, skal_evalueres, evaluation_score, evaluation_notes, payment_method, payment_amount, payment_card_fee, payment_contact, faktura_sendt, mobilepay, mobilepay_amount, mobilepay_received, mobilepay_note, kontant_amount, kontant_received, kontant_note, ub_note, kunde_kontaktet, kunde_kontaktet_dato, kunde_kontaktet_note, location_kontaktet, location_kontaktet_dato, hotel_kontaktet, hotel_kontaktet_dato, hotel_kontaktet_note, firma_info, sms_sendt';
 
 // ── User Profile ──
 
@@ -26,6 +26,20 @@ export async function getUserProfile(userId: string): Promise<OCCUser | null> {
 
 // ── My Jobs ──
 
+const CACHE_KEY = 'my_eventday_jobs';
+
+/** Get cached jobs from localStorage (instant load) */
+export function getCachedJobs(): TaskJob[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as TaskJob[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch all assigned jobs (no time limit), cache locally */
 export async function fetchMyJobs(userEmail: string): Promise<TaskJob[]> {
   try {
     const { data: emp, error: empError } = await supabase
@@ -34,7 +48,7 @@ export async function fetchMyJobs(userEmail: string): Promise<TaskJob[]> {
       .ilike('email', userEmail)
       .single();
 
-    if (empError || !emp) return [];
+    if (empError || !emp) return getCachedJobs();
 
     const { data: assignments, error: assignError } = await supabase
       .from('job_crew_assignments')
@@ -45,21 +59,20 @@ export async function fetchMyJobs(userEmail: string): Promise<TaskJob[]> {
 
     const jobIds = assignments.map(a => a.job_id);
 
-    // Filter: from 7 days ago onwards, sorted ascending (upcoming first)
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
+    // Fetch ALL jobs — no time limit
     const { data: jobs, error: jobsError } = await supabase
       .from('task_jobs')
       .select(TASK_JOB_SELECT)
       .in('id', jobIds)
-      .gte('event_date', weekAgo.toISOString())
       .order('event_date', { ascending: true });
 
-    if (jobsError || !jobs) return [];
+    if (jobsError || !jobs) return getCachedJobs();
+
+    // Cache to localStorage
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(jobs)); } catch {}
     return jobs as TaskJob[];
   } catch {
-    return [];
+    return getCachedJobs();
   }
 }
 

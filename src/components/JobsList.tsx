@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Calendar, MapPin, Users, Clock, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
-import { fetchMyJobs, fetchActivityInfo } from '@/lib/supabase';
+import { fetchMyJobs, fetchActivityInfo, getCachedJobs } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtDate, getRelativeDay, getDanishWeekday } from '@/lib/helpers';
 import { ACTIVITY_COLORS } from '@/lib/activityNames';
@@ -58,9 +58,17 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const load = async () => {
-      if (!profile?.email) return;
-      setLoading(true);
+    if (!profile?.email) return;
+
+    // 1. Show cache instantly
+    const cached = getCachedJobs();
+    if (cached.length > 0) {
+      setJobs(cached);
+      setLoading(false);
+    }
+
+    // 2. Fetch fresh data in background
+    (async () => {
       const data = await fetchMyJobs(profile.email);
       setJobs(data);
 
@@ -73,8 +81,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
         setActivityMap(map);
       }
       setLoading(false);
-    };
-    load();
+    })();
   }, [profile?.email]);
 
   if (loading) {
@@ -115,7 +122,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
         justifyContent: 'space-between',
       }}>
         <div>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: '0.15em', color: '#ea580c' }}>EVENTDAY</span>
+          <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '0.15em', color: '#ea580c' }}>MY EVENTDAY</span>
           <span style={{ fontSize: 13, color: '#64748b', marginLeft: 12 }}>{profile?.name || profile?.email}</span>
         </div>
         <button

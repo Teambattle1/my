@@ -177,8 +177,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
     { label: 'Aktiviteter', value: job.aktiviteter_note },
     { label: 'Gear', value: job.gear_note },
     { label: 'Transport', value: job.transport_note },
-    { label: 'Lokation', value: job.location_note },
-    { label: 'Betaling', value: job.payment_note },
+    { label: 'Betaling', value: job.ub_note },
   ];
 
   const durPerSession = Number(job.duration_minutes) || 0;
