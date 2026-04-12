@@ -14,6 +14,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "@tailwindcss/oxide"]
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.0.0",

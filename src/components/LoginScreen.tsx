@@ -52,7 +52,7 @@ export default function LoginScreen() {
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
           }}>
-            Min Opgave
+            MY EVENTDAY
           </div>
         </div>
 

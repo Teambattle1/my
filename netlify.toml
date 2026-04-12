@@ -1,9 +1,9 @@
 [build]
-  command = "pnpm run build"
+  command = "pnpm install --frozen-lockfile && pnpm run build"
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
 
 [[redirects]]
   from = "/*"
