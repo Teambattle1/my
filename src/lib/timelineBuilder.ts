@@ -80,12 +80,31 @@ export function buildTimeline(
   const routeMinutes = hubRoute?.min ?? null;
   const routeKm = hubRoute?.km ?? null;
 
-  // Activity logistics times
-  const selectedActInfos = activityIds.map(id => activityInfos.find(a => a.id === id)).filter(Boolean) as ActivityInfo[];
-  const packTimeSum = selectedActInfos.reduce((s, a) => s + (a.pack_time_minutes || 0), 0);
-  const setupTimeSum = selectedActInfos.reduce((s, a) => s + (a.setup_time_minutes || 0), 0);
-  const unpackTimeSum = selectedActInfos.reduce((s, a) => s + (a.unpack_time_minutes || 0), 0);
-  const teardownTimeSum = setupTimeSum;
+  // Per-activity logistics — build individual step lists
+  const selectedActInfos = activityIds
+    .map(id => activityInfos.find(a => a.id === id))
+    .filter(Boolean) as ActivityInfo[];
+
+  const multipleActivities = selectedActInfos.length > 1;
+
+  // Per-activity pack/setup/teardown/unpack
+  const packSteps = selectedActInfos
+    .filter(a => (a.pack_time_minutes || 0) > 0)
+    .map(a => ({ name: a.name, min: a.pack_time_minutes! }));
+  const setupSteps = selectedActInfos
+    .filter(a => (a.setup_time_minutes || 0) > 0)
+    .map(a => ({ name: a.name, min: a.setup_time_minutes! }));
+  const teardownSteps = selectedActInfos
+    .filter(a => (a.setup_time_minutes || 0) > 0) // teardown ≈ setup
+    .map(a => ({ name: a.name, min: a.setup_time_minutes! }));
+  const unpackSteps = selectedActInfos
+    .filter(a => (a.unpack_time_minutes || 0) > 0)
+    .map(a => ({ name: a.name, min: a.unpack_time_minutes! }));
+
+  const packTimeSum = packSteps.reduce((s, a) => s + a.min, 0);
+  const setupTimeSum = setupSteps.reduce((s, a) => s + a.min, 0);
+  const teardownTimeSum = teardownSteps.reduce((s, a) => s + a.min, 0);
+  const unpackTimeSum = unpackSteps.reduce((s, a) => s + a.min, 0);
 
   // Activity summaries for display
   const activitySummaries = activityIds.map(id => {
@@ -99,17 +118,26 @@ export function buildTimeline(
     };
   });
 
-  // Build timeline items
+  // ═══════════════════════════════════════
+  // Build timeline items — per-activity
+  // ═══════════════════════════════════════
   const items: TimelineItem[] = [];
 
+  // ── FØR: Get-in lager ──
   if (getinLagerTime) {
     items.push({ label: 'Get-in lager', time: getinLagerTime, color: 'green' });
   }
-  if (packTimeSum > 0) {
+
+  // ── FØR: Per-activity pakning på lager ──
+  if (multipleActivities) {
+    for (const step of packSteps) {
+      items.push({ label: `Pak ${step.name}`, time: `${step.min} min`, color: 'blue' });
+    }
+  } else if (packTimeSum > 0) {
     items.push({ label: 'Pak lager', time: `${packTimeSum} min`, color: 'blue' });
   }
 
-  // Kørsel — use OSRM route data if available, otherwise fall back to transit estimate
+  // ── FØR: Kørsel til lokation ──
   const driveMinEstimate = routeMinutes
     ?? (transitMinutes !== null && transitMinutes > 0 ? Math.max(0, transitMinutes - packTimeSum) : null);
   if (driveMinEstimate !== null && driveMinEstimate > 0) {
@@ -117,12 +145,21 @@ export function buildTimeline(
     items.push({ label: driveLabel, time: `${driveMinEstimate} min`, color: 'yellow' });
   }
 
+  // ── FØR: Get-in lokation ──
   if (getinLocTime) {
     items.push({ label: 'Get-in lokation', time: getinLocTime, color: 'green' });
   }
-  if (setupTimeSum > 0) {
+
+  // ── FØR: Per-activity opsætning på lokation ──
+  if (multipleActivities) {
+    for (const step of setupSteps) {
+      items.push({ label: `Opsæt ${step.name}`, time: `${step.min} min`, color: 'blue' });
+    }
+  } else if (setupTimeSum > 0) {
     items.push({ label: 'Opsætning', time: `${setupTimeSum} min`, color: 'blue' });
   }
+
+  // ── UNDER: Session ──
   if (gamestartTime) {
     items.push({ label: 'Session start', time: gamestartTime, color: 'highlight' });
   }
@@ -132,26 +169,39 @@ export function buildTimeline(
   if (endTime && endTime !== '—') {
     items.push({ label: 'Session slut', time: endTime, color: 'highlight' });
   }
-  if (teardownTimeSum > 0) {
+
+  // ── EFTER: Per-activity nedpakning på lokation ──
+  if (multipleActivities) {
+    for (const step of teardownSteps) {
+      items.push({ label: `Nedpak ${step.name}`, time: `${step.min} min`, color: 'blue' });
+    }
+  } else if (teardownTimeSum > 0) {
     items.push({ label: 'Nedpakning', time: `${teardownTimeSum} min`, color: 'blue' });
   }
+
+  // ── EFTER: Tank / Oplad bil ──
   if (job.bil_tankes || job.bil_oplades) {
-    const bilLabel = [job.bil_tankes ? 'Tank' : '', job.bil_oplades ? 'Oplad' : ''].filter(Boolean).join(' + ');
+    const bilLabel = [job.bil_tankes ? 'Tank bil' : '', job.bil_oplades ? 'Oplad bil' : ''].filter(Boolean).join(' + ');
     const bilMin = (job.bil_tankes ? 10 : 0) + (job.bil_oplades ? 30 : 0);
     items.push({ label: bilLabel, time: `${bilMin} min`, color: 'purple' });
   }
 
-  // Retur kørsel
+  // ── EFTER: Retur kørsel ──
   if (driveMinEstimate !== null && driveMinEstimate > 0) {
     const returLabel = routeKm ? `Retur (${routeKm} km)` : 'Retur kørsel';
     items.push({ label: returLabel, time: `${driveMinEstimate} min`, color: 'yellow' });
   }
 
-  if (unpackTimeSum > 0) {
+  // ── EFTER: Per-activity udpakning på lager ──
+  if (multipleActivities) {
+    for (const step of unpackSteps) {
+      items.push({ label: `Udpak ${step.name}`, time: `${step.min} min`, color: 'blue' });
+    }
+  } else if (unpackTimeSum > 0) {
     items.push({ label: 'Udpak lager', time: `${unpackTimeSum} min`, color: 'blue' });
   }
 
-  // Day end estimate
+  // ── Dag slut estimat ──
   const driveForCalc = driveMinEstimate ?? 0;
   const postEventMins = teardownTimeSum
     + driveForCalc
