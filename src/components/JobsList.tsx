@@ -4,7 +4,14 @@ import { fetchMyJobs, fetchActivityInfo, getCachedJobs } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtDate, getRelativeDay, getDanishWeekday } from '@/lib/helpers';
 import { ACTIVITY_COLORS } from '@/lib/activityNames';
+import WeatherChip from './Weather/WeatherChip';
+import WeatherDashboard from './Weather/WeatherDashboard';
 import type { TaskJob, ActivityInfo } from '@/types';
+
+interface WeatherTarget {
+  city: string;
+  address: string | null;
+}
 
 interface JobsListProps {
   onJobSelected: (jobId: string) => void;
@@ -27,12 +34,12 @@ function LiveClock() {
       gap: 2,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       fontVariantNumeric: 'tabular-nums',
-      color: '#f1f5f9',
+      color: '#ffffff',
     }}>
-      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.02em' }}>{hh}</span>
-      <span style={{ fontSize: 22, fontWeight: 700, color: '#64748b' }}>:</span>
-      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.02em' }}>{mm}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginLeft: 2 }}>:{ss}</span>
+      <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: '0.02em' }}>{hh}</span>
+      <span style={{ fontSize: 24, fontWeight: 800 }}>:</span>
+      <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: '0.02em' }}>{mm}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', marginLeft: 2 }}>:{ss}</span>
     </div>
   );
 }
@@ -83,6 +90,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
   const [activityMap, setActivityMap] = useState<Record<string, ActivityInfo>>({});
   const [loading, setLoading] = useState(true);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+  const [weatherTarget, setWeatherTarget] = useState<WeatherTarget | null>(null);
 
   useEffect(() => {
     if (!employeeId) return;
@@ -160,10 +168,12 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
             MY EVENTDAY
           </div>
           <div style={{
-            fontSize: 17,
-            fontWeight: 700,
-            color: '#f1f5f9',
-            marginTop: 1,
+            fontSize: 18,
+            fontWeight: 800,
+            color: '#ffffff',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            marginTop: 2,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -223,26 +233,28 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
                     borderBottom: '1px solid #334155', marginBottom: 12,
                   }}
                 >
-                  {isCollapsed ? <ChevronRight size={16} color="#64748b" /> : <ChevronDown size={16} color="#ea580c" />}
+                  {isCollapsed ? <ChevronRight size={16} color="#ffffff" /> : <ChevronDown size={16} color="#ea580c" />}
                   <span style={{
-                    fontSize: 14, fontWeight: 800, textTransform: 'capitalize',
-                    color: isCollapsed ? '#64748b' : '#ea580c',
-                    letterSpacing: '0.05em',
+                    fontSize: 14, fontWeight: 900, textTransform: 'uppercase',
+                    color: isCollapsed ? '#ffffff' : '#ea580c',
+                    letterSpacing: '0.12em',
                   }}>
                     {monthGroup.month}
                   </span>
-                  <span style={{ fontSize: 11, color: '#475569' }}>({jobCount} opgave{jobCount !== 1 ? 'r' : ''})</span>
+                  <span style={{ fontSize: 11, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                    ({jobCount} {jobCount === 1 ? 'OPGAVE' : 'OPGAVER'})
+                  </span>
                 </div>
 
                 {!isCollapsed && monthGroup.weeks.map(weekGroup => (
                   <div key={weekGroup.week} style={{ marginBottom: 16 }}>
                     {/* Week header */}
                     <div style={{
-                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                      letterSpacing: '0.15em', color: '#475569',
-                      marginBottom: 8, paddingLeft: 4,
+                      fontSize: 11, fontWeight: 800, textTransform: 'uppercase',
+                      letterSpacing: '0.18em', color: '#ffffff',
+                      marginBottom: 8, paddingLeft: 4, opacity: 0.85,
                     }}>
-                      Uge {weekGroup.week}
+                      UGE {weekGroup.week}
                     </div>
 
                     {weekGroup.dates.map(dateGroup => {
@@ -258,14 +270,15 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
                             display: 'flex', alignItems: 'center', gap: 6,
                             marginBottom: 6, paddingLeft: 4,
                           }}>
-                            <Calendar size={11} color={isToday ? '#ea580c' : '#64748b'} />
+                            <Calendar size={11} color={isToday ? '#ea580c' : '#ffffff'} />
                             <span style={{
-                              fontSize: 12, fontWeight: isToday ? 700 : 500,
-                              color: isToday ? '#ea580c' : (isPast ? '#475569' : '#94a3b8'),
-                              textTransform: 'capitalize',
+                              fontSize: 12, fontWeight: isToday ? 900 : 700,
+                              color: isToday ? '#ea580c' : (isPast ? '#64748b' : '#ffffff'),
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.08em',
                             }}>
-                              {relDay && <span style={{ fontWeight: 700 }}>{relDay} — </span>}
-                              {weekday} {fmtDate(dateGroup.dateKey)}
+                              {relDay && <span style={{ fontWeight: 900 }}>{relDay.toUpperCase()} — </span>}
+                              {weekday.toUpperCase()} {fmtDate(dateGroup.dateKey).toUpperCase()}
                             </span>
                           </div>
 
@@ -276,6 +289,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
                               job={job}
                               activityMap={activityMap}
                               onSelect={onJobSelected}
+                              onOpenWeather={setWeatherTarget}
                               dimmed={isPast}
                               isToday={isToday}
                             />
@@ -290,14 +304,24 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
           })
         )}
       </div>
+
+      {/* Fullscreen weather overlay triggered from any JobCard */}
+      {weatherTarget && (
+        <WeatherDashboard
+          city={weatherTarget.city}
+          address={weatherTarget.address}
+          onClose={() => setWeatherTarget(null)}
+        />
+      )}
     </div>
   );
 }
 
-function JobCard({ job, activityMap, onSelect, dimmed, isToday }: {
+function JobCard({ job, activityMap, onSelect, onOpenWeather, dimmed, isToday }: {
   job: TaskJob;
   activityMap: Record<string, ActivityInfo>;
   onSelect: (id: string) => void;
+  onOpenWeather: (target: WeatherTarget) => void;
   dimmed?: boolean;
   isToday?: boolean;
 }) {
@@ -336,14 +360,30 @@ function JobCard({ job, activityMap, onSelect, dimmed, isToday }: {
                 {time}
               </span>
             )}
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
-              {job.client_name || 'Uden navn'}
+            <span style={{
+              fontSize: 15,
+              fontWeight: 900,
+              color: '#ffffff',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}>
+              {(job.client_name || 'Uden navn').toUpperCase()}
             </span>
           </div>
 
           {/* Location */}
           {job.location_name && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              color: '#e2e8f0',
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontWeight: 600,
+            }}>
               <MapPin size={11} />
               {job.location_name}
             </div>
@@ -374,13 +414,25 @@ function JobCard({ job, activityMap, onSelect, dimmed, isToday }: {
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <ChevronRight size={18} color="#475569" />
-          {job.opgave_id && (
-            <span style={{ fontSize: 9, color: '#475569', fontFamily: 'monospace' }}>
-              #{String(job.opgave_id).padStart(4, '0')}
-            </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {(job.location_city || job.location_address) && (
+            <WeatherChip
+              city={job.location_city || job.location_name || 'Lokation'}
+              address={job.location_address}
+              onClick={() => onOpenWeather({
+                city: job.location_city || job.location_name || 'Lokation',
+                address: job.location_address,
+              })}
+            />
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {job.opgave_id && (
+              <span style={{ fontSize: 9, color: '#cbd5e1', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.04em' }}>
+                #{String(job.opgave_id).padStart(4, '0')}
+              </span>
+            )}
+            <ChevronRight size={18} color="#64748b" />
+          </div>
         </div>
       </div>
     </div>

@@ -220,6 +220,94 @@ export async function findEmployeeByEmail(email: string): Promise<{ id: string; 
   }
 }
 
+// ── Venue (locations) ──
+
+export interface VenueInfo {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  phone: string | null;
+  website: string | null;
+  logo_url: string | null;
+  notes: string | null;
+  venue_note: string | null;
+  adgang_note: string | null;
+  venue_code: string | null;
+  venue_access_code: string | null;
+  teknisk_service_name: string | null;
+  teknisk_service_phone: string | null;
+  contacts: unknown;
+  last_visited_note: string | null;
+}
+
+const VENUE_SELECT = 'id, name, address, city, postal_code, phone, website, logo_url, notes, venue_note, adgang_note, venue_code, venue_access_code, teknisk_service_name, teknisk_service_phone, contacts, last_visited_note';
+
+/**
+ * Find a venue in the shared `locations` table that matches the job's location.
+ * Tries exact name match first, then substring match on name or address.
+ * Returns null when nothing found — caller renders "OPRET VENUE" instead.
+ */
+export async function findVenueForJob(params: {
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+}): Promise<VenueInfo | null> {
+  const { name, address, city } = params;
+  const trimmedName = (name || '').trim();
+  const trimmedAddr = (address || '').trim();
+  try {
+    // 1. Exact name match (case-insensitive)
+    if (trimmedName) {
+      const { data } = await supabase
+        .from('locations')
+        .select(VENUE_SELECT)
+        .ilike('name', trimmedName)
+        .eq('hidden', false)
+        .limit(1);
+      if (data && data.length > 0) return data[0] as VenueInfo;
+    }
+
+    // 2. Name substring match
+    if (trimmedName.length >= 3) {
+      const { data } = await supabase
+        .from('locations')
+        .select(VENUE_SELECT)
+        .ilike('name', `%${trimmedName}%`)
+        .eq('hidden', false)
+        .limit(1);
+      if (data && data.length > 0) return data[0] as VenueInfo;
+    }
+
+    // 3. Address substring match — catches cases where job uses a different venue name
+    if (trimmedAddr.length >= 5) {
+      const { data } = await supabase
+        .from('locations')
+        .select(VENUE_SELECT)
+        .ilike('address', `%${trimmedAddr.split(',')[0]}%`)
+        .eq('hidden', false)
+        .limit(1);
+      if (data && data.length > 0) return data[0] as VenueInfo;
+    }
+
+    // 4. Fallback: city match (rare — last resort)
+    if (city) {
+      const { data } = await supabase
+        .from('locations')
+        .select(VENUE_SELECT)
+        .ilike('city', city)
+        .eq('hidden', false)
+        .limit(1);
+      if (data && data.length > 0) return data[0] as VenueInfo;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Look up an employee by navn — used after ef-verify-code returns the user's name. */
 export async function findEmployeeByName(navn: string): Promise<{ id: string; location: 'Øst' | 'Vest' | null } | null> {
   try {

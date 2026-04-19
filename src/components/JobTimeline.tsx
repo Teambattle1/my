@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp, CloudSun, ClipboardCheck } from 'lucide-react';
-import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob } from '@/lib/supabase';
+import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp, CloudSun, ClipboardCheck, Building2, ExternalLink, Plus, Globe } from 'lucide-react';
+import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob, findVenueForJob } from '@/lib/supabase';
+import type { VenueInfo } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildTimeline, calculateRoute, WAREHOUSES } from '@/lib/timelineBuilder';
 import { fmtDate, fmtShortDate, getTaskRegion } from '@/lib/helpers';
@@ -95,6 +96,188 @@ function MNoteRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 /* ═══════════════════════════════════════════════
+   Venue info panel — reads from `locations` (VENUE db)
+   ═══════════════════════════════════════════════ */
+
+const VENUE_BASE_URL = 'https://venue.eventday.dk';
+
+function VenueInfoPanel({
+  venue,
+  venueLoading,
+  fallbackName,
+  fallbackAddress,
+}: {
+  venue: VenueInfo | null;
+  venueLoading: boolean;
+  fallbackName: string | null;
+  fallbackAddress: string | null;
+}) {
+  if (venueLoading) {
+    return (
+      <div className="no-print" style={{
+        marginTop: 10, padding: '10px 14px', borderRadius: 12,
+        border: '1px dashed #cbd5e1', background: '#f8fafc',
+        display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b',
+      }}>
+        <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> Slår venue op…
+      </div>
+    );
+  }
+
+  if (!venue) {
+    // Not found → OPRET VENUE link
+    const params = new URLSearchParams();
+    params.set('new', '1');
+    if (fallbackName) params.set('name', fallbackName);
+    if (fallbackAddress) params.set('address', fallbackAddress);
+    const createUrl = `${VENUE_BASE_URL}/i?${params.toString()}`;
+    return (
+      <a
+        className="no-print"
+        href={createUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          marginTop: 10,
+          width: '100%',
+          padding: '10px 14px',
+          borderRadius: 12,
+          border: '1px dashed #fdba74',
+          background: '#fff7ed',
+          color: '#c2410c',
+          fontSize: 13,
+          fontWeight: 800,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          textDecoration: 'none',
+          boxSizing: 'border-box',
+        }}
+      >
+        <Plus size={16} /> Opret venue
+      </a>
+    );
+  }
+
+  // Found → info card + ÅBN VENUE deep link
+  const venueUrl = `${VENUE_BASE_URL}/i/${venue.id}`;
+  return (
+    <div className="no-print" style={{
+      marginTop: 10,
+      borderRadius: 14,
+      overflow: 'hidden',
+      border: '1px solid #e2e8f0',
+      background: '#fff',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px',
+        background: 'linear-gradient(135deg, #f1f5f9 0%, #f8fafc 100%)',
+        borderBottom: '1px solid #e2e8f0',
+      }}>
+        {venue.logo_url ? (
+          <img
+            src={venue.logo_url}
+            alt=""
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain', background: '#fff', border: '1px solid #e2e8f0', flexShrink: 0 }}
+          />
+        ) : (
+          <div style={{
+            width: 36, height: 36, borderRadius: 8, background: '#e0f2fe',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <Building2 size={18} color="#0369a1" />
+          </div>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#0369a1', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            VENUE{venue.venue_code ? ` · ${venue.venue_code}` : ''}
+          </div>
+          <div style={{
+            fontSize: 14, fontWeight: 800, color: '#0f172a',
+            textTransform: 'uppercase', letterSpacing: '0.03em',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {venue.name}
+          </div>
+        </div>
+      </div>
+
+      {/* Body: notes + contact */}
+      <div style={{ padding: '10px 12px', fontSize: 13, color: '#1f2937' }}>
+        {venue.venue_note && (
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Venue-note:</span>
+            {venue.venue_note}
+          </div>
+        )}
+        {venue.adgang_note && (
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Adgang:</span>
+            {venue.adgang_note}
+          </div>
+        )}
+        {venue.notes && !venue.venue_note && (
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: 6 }}>Note:</span>
+            {venue.notes}
+          </div>
+        )}
+        {(venue.phone || venue.teknisk_service_phone || venue.website) && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 6, fontSize: 12 }}>
+            {venue.phone && (
+              <a href={`tel:${venue.phone}`} style={{ color: '#2563eb', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Phone size={11} /> {venue.phone}
+              </a>
+            )}
+            {venue.teknisk_service_phone && (
+              <a href={`tel:${venue.teknisk_service_phone}`} style={{ color: '#2563eb', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Phone size={11} /> Teknisk: {venue.teknisk_service_phone}
+              </a>
+            )}
+            {venue.website && (
+              <a href={venue.website} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Globe size={11} /> Website
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* CTA: ÅBN VENUE */}
+      <a
+        href={venueUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          padding: '11px 14px',
+          background: 'linear-gradient(135deg, #0369a1 0%, #0284c7 100%)',
+          color: '#ffffff',
+          fontSize: 13,
+          fontWeight: 900,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          textDecoration: 'none',
+          borderTop: '1px solid #e2e8f0',
+        }}
+      >
+        <ExternalLink size={14} /> Åbn venue
+      </a>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
    Print version (A4) — compact inline styles
    ═══════════════════════════════════════════════ */
 
@@ -159,6 +342,8 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const [myRole, setMyRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [weatherOpen, setWeatherOpen] = useState(false);
+  const [venue, setVenue] = useState<VenueInfo | null>(null);
+  const [venueLoading, setVenueLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -182,6 +367,18 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
     if (addr.length < 4) return;
     calculateRoute(addr).then(r => setRouteInfo(r));
   }, [job]);
+
+  useEffect(() => {
+    if (!job) return;
+    setVenueLoading(true);
+    findVenueForJob({
+      name: job.location_name,
+      address: job.location_address,
+      city: job.location_city,
+    })
+      .then(v => setVenue(v))
+      .finally(() => setVenueLoading(false));
+  }, [job?.location_name, job?.location_address, job?.location_city]);
 
   if (loading || !job) {
     return (
@@ -379,19 +576,28 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
                 background: 'linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)',
                 color: '#0369a1',
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 800,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                letterSpacing: '0.02em',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
               }}
             >
               <CloudSun size={16} />
               Vis aktuelt vejr{job.location_city ? ` i ${job.location_city}` : ''}
             </button>
           )}
+
+          {/* ── VENUE-info + link ── */}
+          <VenueInfoPanel
+            venue={venue}
+            venueLoading={venueLoading}
+            fallbackName={job.location_name}
+            fallbackAddress={job.location_address}
+          />
           {routeInfo && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Kørsel fra lager</div>

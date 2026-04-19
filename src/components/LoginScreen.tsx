@@ -112,9 +112,11 @@ export default function LoginScreen() {
           </div>
           <div style={{
             fontSize: 12,
-            color: 'rgba(255,255,255,0.75)',
-            marginTop: 4,
-            letterSpacing: '0.05em',
+            fontWeight: 700,
+            color: '#ffffff',
+            marginTop: 5,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
           }}>
             Log ind med din kode
           </div>
@@ -127,10 +129,10 @@ export default function LoginScreen() {
             style={{
               display: 'block',
               fontSize: 11,
-              fontWeight: 700,
-              color: '#94a3b8',
+              fontWeight: 800,
+              color: '#ffffff',
               marginBottom: 10,
-              letterSpacing: '0.12em',
+              letterSpacing: '0.18em',
               textTransform: 'uppercase',
             }}
           >

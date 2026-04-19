@@ -38,69 +38,86 @@ export default function WeatherDashboard({ city, address, onClose }: Props) {
 
   return (
     <div
-      onClick={onClose}
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 100,
-        background: 'rgba(15,23,42,0.75)',
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
+        background: '#0f172a',
         display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
+        flexDirection: 'column',
         animation: 'wx-fade 0.2s ease-out',
       }}
     >
       <style>{`
         @keyframes wx-fade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes wx-slide { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>
 
       <div
-        onClick={e => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: 520,
-          maxHeight: '92vh',
+          height: '100%',
           overflowY: 'auto',
           background: '#f1f5f9',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          borderRadius: 24,
-          margin: '0 8px 8px',
-          padding: '16px 14px 24px',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.4)',
-          animation: 'wx-slide 0.25s ease-out',
+          padding: '16px 14px 40px',
           fontFamily: 'Arial, Helvetica, sans-serif',
+          boxSizing: 'border-box',
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, padding: '0 4px' }}>
-          <div>
-            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        {/* Sticky header */}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          margin: '-16px -14px 14px',
+          padding: '14px 16px',
+          background: '#0f172a',
+          borderBottom: '1px solid #1e293b',
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{
+              fontSize: 10,
+              color: '#ea580c',
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+            }}>
               Vejrudsigt
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+            <div style={{
+              fontSize: 18,
+              fontWeight: 900,
+              color: '#ffffff',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
               {locationLabel}
             </div>
           </div>
           <button
             onClick={onClose}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              border: '1px solid #334155',
+              background: '#1e293b',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
+              marginLeft: 10,
             }}
             aria-label="Luk"
+            title="Tilbage"
           >
-            <X size={18} color="#0f172a" />
+            <X size={18} color="#ffffff" />
           </button>
         </div>
 
