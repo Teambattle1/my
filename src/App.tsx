@@ -1,15 +1,13 @@
-import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginScreen from '@/components/LoginScreen';
 import JobsList from '@/components/JobsList';
 import JobTimeline from '@/components/JobTimeline';
+import { useJobRoute } from '@/hooks/useJobRoute';
 import { Loader2 } from 'lucide-react';
-
-type View = { page: 'jobs' } | { page: 'timeline'; jobId: string };
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [view, setView] = useState<View>({ page: 'jobs' });
+  const [route, setRoute] = useJobRoute();
 
   if (isLoading) {
     return (
@@ -30,9 +28,14 @@ export default function App() {
     return <LoginScreen />;
   }
 
-  if (view.page === 'timeline') {
-    return <JobTimeline jobId={view.jobId} onBack={() => setView({ page: 'jobs' })} />;
+  if (route.job) {
+    return (
+      <JobTimeline
+        jobId={route.job}
+        onBack={() => setRoute({ job: null, check: null })}
+      />
+    );
   }
 
-  return <JobsList onJobSelected={(id) => setView({ page: 'timeline', jobId: id })} />;
+  return <JobsList onJobSelected={(id) => setRoute({ job: id })} />;
 }

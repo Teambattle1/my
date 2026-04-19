@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp, CloudSun, ClipboardCheck } from 'lucide-react';
 import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildTimeline, calculateRoute, WAREHOUSES } from '@/lib/timelineBuilder';
 import { fmtDate, fmtShortDate, getTaskRegion } from '@/lib/helpers';
+import { useJobRoute } from '@/hooks/useJobRoute';
 import TimelineBar from './TimelineBar';
 import CrewPanel from './CrewPanel';
+import WeatherDashboard from './Weather/WeatherDashboard';
+import CheckEmbed from './CheckEmbed';
 import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo, RouteInfo } from '@/types';
 
 /* ═══════════════════════════════════════════════
@@ -145,6 +148,7 @@ interface JobTimelineProps { jobId: string; onBack: () => void; }
 
 export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const { employeeId, employeeLocation } = useAuth();
+  const [route, setRoute] = useJobRoute();
   const [job, setJob] = useState<TaskJob | null>(null);
   const [crew, setCrew] = useState<CrewAssignment[]>([]);
   const [vehicles, setVehicles] = useState<VehicleAssignment[]>([]);
@@ -154,6 +158,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [myRole, setMyRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [weatherOpen, setWeatherOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -194,7 +199,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const timeline = buildTimeline(job, activityInfos, routeInfo, effectiveRegion);
   const isLead = myRole === 'lead' || myRole === 'teamlead';
   const warehouseLabel = effectiveRegion === 'øst' ? WAREHOUSES.sjaelland.label : WAREHOUSES.jylland.label;
-  const route = routeInfo ? (effectiveRegion === 'øst' ? routeInfo.sjaelland : routeInfo.jylland) : null;
+  const driveRoute = routeInfo ? (effectiveRegion === 'øst' ? routeInfo.sjaelland : routeInfo.jylland) : null;
   const primaryVehicle = vehicles[0];
   const actIdToInfo: Record<string, ActivityInfo> = {};
   activityInfos.forEach(a => { actIdToInfo[a.id] = a; });
@@ -352,7 +357,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           <MRow label="Session slut" value={timeline.endTime !== '—' ? timeline.endTime : null} icon={<Clock size={14} />} bold />
           <div style={{ height: 4, borderTop: '1px solid #f3f4f6', marginTop: 4 }} />
           {timeline.teardownTimeSum > 0 && <MSubRow text={`Nedpakning: ${timeline.teardownTimeSum} min`} color="#1d4ed8" />}
-          {route && <MSubRow text={`Retur kørsel: ${route.min} min (${route.km} km)`} color="#a16207" />}
+          {driveRoute && <MSubRow text={`Retur kørsel: ${driveRoute.min} min (${driveRoute.km} km)`} color="#a16207" />}
           {timeline.unpackTimeSum > 0 && <MSubRow text={`Udpak lager: ${timeline.unpackTimeSum} min`} color="#1d4ed8" />}
           {timeline.dagSlutTime && <MRow label="Opgave slut" value={timeline.dagSlutTime} icon={<Clock size={14} />} bold />}
         </MobileSection>
@@ -361,6 +366,32 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
         <MobileSection title="Lokation" color="green" defaultOpen={true}>
           <MRow label="Sted" value={job.location_name} bold icon={<MapPin size={14} />} />
           <MRow label="Adresse" value={job.location_address} />
+          {(job.location_city || job.location_address) && (
+            <button
+              className="no-print"
+              onClick={() => setWeatherOpen(true)}
+              style={{
+                marginTop: 10,
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: 12,
+                border: '1px solid #bae6fd',
+                background: 'linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)',
+                color: '#0369a1',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                letterSpacing: '0.02em',
+              }}
+            >
+              <CloudSun size={16} />
+              Vis aktuelt vejr{job.location_city ? ` i ${job.location_city}` : ''}
+            </button>
+          )}
           {routeInfo && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Kørsel fra lager</div>
@@ -426,11 +457,11 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           )}
           {job.bil_tankes && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600, marginTop: 4 }}>Bil skal tankes</div>}
           {job.bil_oplades && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600 }}>Bil skal oplades</div>}
-          {route && (
+          {driveRoute && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6b7280' }}>Kørsel (én vej)</span>
-                <span style={{ fontWeight: 700 }}>{route.km} km / {route.min} min</span>
+                <span style={{ fontWeight: 700 }}>{driveRoute.km} km / {driveRoute.min} min</span>
               </div>
             </div>
           )}
@@ -465,18 +496,47 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
         </MobileSection>
 
         {/* ── PAKKELISTE ── */}
-        {packingItems.length > 0 && (
-          <MobileSection title="Pakkeliste" color="green" defaultOpen={false}>
-            {packingItems.map(item => (
-              <div key={item.id} style={{ display: 'flex', gap: 8, fontSize: 14, marginBottom: 6, alignItems: 'center' }}>
-                <span style={{ fontSize: 16, color: item.checked ? '#22c55e' : '#d1d5db' }}>{item.checked ? '✓' : '☐'}</span>
-                <span style={{ color: '#374151' }}>
-                  {item.quantity > 1 ? `${item.quantity}${item.unit ? ` ${item.unit}` : '×'} ` : ''}{item.item_name}
-                </span>
+        <MobileSection title="Pakkeliste" color="green" defaultOpen={true}>
+          <button
+            className="no-print"
+            onClick={() => setRoute({ check: 'packing' })}
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              marginBottom: packingItems.length > 0 ? 12 : 0,
+              borderRadius: 12,
+              border: '1px solid #6ee7b7',
+              background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)',
+              color: '#047857',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              letterSpacing: '0.02em',
+            }}
+          >
+            <ClipboardCheck size={16} />
+            Åbn pakkeliste i CHECK
+          </button>
+          {packingItems.length > 0 && (
+            <div style={{ paddingTop: 4, borderTop: '1px dashed #d1fae5' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 8, marginBottom: 6 }}>
+                Preview fra opgaven
               </div>
-            ))}
-          </MobileSection>
-        )}
+              {packingItems.map(item => (
+                <div key={item.id} style={{ display: 'flex', gap: 8, fontSize: 14, marginBottom: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 16, color: item.checked ? '#22c55e' : '#d1d5db' }}>{item.checked ? '✓' : '☐'}</span>
+                  <span style={{ color: '#374151' }}>
+                    {item.quantity > 1 ? `${item.quantity}${item.unit ? ` ${item.unit}` : '×'} ` : ''}{item.item_name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </MobileSection>
 
         {/* ── BORDE ── */}
         {tableItems.length > 0 && (
@@ -570,7 +630,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
               <PRow label="Varighed" value={timeline.dur > 0 ? (timeline.maxSessions > 1 ? `${durPerSession} min × ${timeline.maxSessions} = ${timeline.dur} min` : `${timeline.dur} min`) : null} />
               <PRow label="Session slut" value={timeline.endTime !== '—' ? timeline.endTime : null} />
               {timeline.teardownTimeSum > 0 && <PSubRow text={`Nedpakning: ${timeline.teardownTimeSum} min`} color="#1d4ed8" />}
-              {route && <PSubRow text={`Retur kørsel: ${route.min} min (${route.km} km)`} color="#a16207" />}
+              {driveRoute && <PSubRow text={`Retur kørsel: ${driveRoute.min} min (${driveRoute.km} km)`} color="#a16207" />}
               {timeline.unpackTimeSum > 0 && <PSubRow text={`Udpak lager: ${timeline.unpackTimeSum} min`} color="#1d4ed8" />}
               {timeline.dagSlutTime && <PRow label="Opgave slut" value={timeline.dagSlutTime} bold />}
             </PrintSection>
@@ -661,6 +721,23 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           </div>
         </div>
       </div>
+
+      {/* Weather modal */}
+      {weatherOpen && (
+        <WeatherDashboard
+          city={job.location_city || job.location_name || 'Lokation'}
+          address={job.location_address}
+          onClose={() => setWeatherOpen(false)}
+        />
+      )}
+
+      {/* CHECK-embed (pakkeliste) */}
+      {route.check === 'packing' && (
+        <CheckEmbed
+          opgaveId={job.opgave_id}
+          onClose={() => setRoute({ check: null })}
+        />
+      )}
     </>
   );
 }

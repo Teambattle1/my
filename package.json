@@ -10,15 +10,21 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.561.0",
+    "nuqs": "^2.8.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "@tailwindcss/oxide"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@tailwindcss/oxide"
+    ]
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@types/leaflet": "^1.9.21",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.2.1",
