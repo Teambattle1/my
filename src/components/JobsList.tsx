@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, MapPin, Users, Clock, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Loader2, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
 import { fetchMyJobs, fetchActivityInfo, getCachedJobs } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtDate, getRelativeDay, getDanishWeekday } from '@/lib/helpers';
@@ -8,6 +8,33 @@ import type { TaskJob, ActivityInfo } from '@/types';
 
 interface JobsListProps {
   onJobSelected: (jobId: string) => void;
+}
+
+/** Live 24-hour clock — ticks every second. */
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: 2,
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      fontVariantNumeric: 'tabular-nums',
+      color: '#f1f5f9',
+    }}>
+      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.02em' }}>{hh}</span>
+      <span style={{ fontSize: 22, fontWeight: 700, color: '#64748b' }}>:</span>
+      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.02em' }}>{mm}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginLeft: 2 }}>:{ss}</span>
+    </div>
+  );
 }
 
 /** Get ISO week number */
@@ -51,14 +78,14 @@ function groupJobs(jobs: TaskJob[]): { month: string; weeks: { week: number; dat
 }
 
 export default function JobsList({ onJobSelected }: JobsListProps) {
-  const { profile, signOut } = useAuth();
+  const { session, employeeId, signOut } = useAuth();
   const [jobs, setJobs] = useState<TaskJob[]>([]);
   const [activityMap, setActivityMap] = useState<Record<string, ActivityInfo>>({});
   const [loading, setLoading] = useState(true);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!profile?.email) return;
+    if (!employeeId) return;
 
     // 1. Show cache instantly
     const cached = getCachedJobs();
@@ -69,7 +96,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
 
     // 2. Fetch fresh data in background
     (async () => {
-      const data = await fetchMyJobs(profile.email);
+      const data = await fetchMyJobs(employeeId);
       setJobs(data);
 
       const allIds = new Set<string>();
@@ -82,7 +109,7 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
       }
       setLoading(false);
     })();
-  }, [profile?.email]);
+  }, [employeeId]);
 
   if (loading) {
     return (
@@ -115,29 +142,60 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
     }}>
       {/* Header */}
       <div style={{
-        padding: '20px 24px',
+        padding: '14px 20px',
         borderBottom: '1px solid #1e293b',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: 16,
       }}>
-        <div>
-          <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '0.15em', color: '#ea580c' }}>MY EVENTDAY</span>
-          <span style={{ fontSize: 13, color: '#64748b', marginLeft: 12 }}>{profile?.name || profile?.email}</span>
+        {/* Left: logo + user */}
+        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: '0.18em',
+            color: '#ea580c',
+            textTransform: 'uppercase',
+          }}>
+            MY EVENTDAY
+          </div>
+          <div style={{
+            fontSize: 17,
+            fontWeight: 700,
+            color: '#f1f5f9',
+            marginTop: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {session?.name || ''}
+          </div>
         </div>
+
+        {/* Center: live 24h clock */}
+        <LiveClock />
+
+        {/* Right: log out icon */}
         <button
           onClick={signOut}
+          aria-label="Log ud"
+          title="Log ud"
           style={{
-            padding: '6px 16px',
+            width: 38,
+            height: 38,
+            padding: 0,
             background: 'transparent',
-            border: '1px solid #475569',
-            borderRadius: 6,
+            border: '1px solid #334155',
+            borderRadius: 10,
             color: '#94a3b8',
-            fontSize: 13,
             cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
-          Log ud
+          <LogOut size={16} />
         </button>
       </div>
 

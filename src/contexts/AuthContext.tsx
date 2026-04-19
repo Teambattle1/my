@@ -1,123 +1,144 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
-import { supabase, getUserProfile, findEmployeeByEmail } from '@/lib/supabase';
-import type { OCCUser, UserRole } from '@/types';
+import { supabase, findEmployeeByName } from '@/lib/supabase';
 
 type EmployeeLocation = 'Øst' | 'Vest' | null;
 
+/** Session saved to localStorage — key 'ed_user_session' (same as eventday-landing). */
+interface UserSession {
+  name: string;
+  role: string;                // 'admin' | 'crew' | 'ef_admin' | etc.
+  sites?: LandingSite[];
+  employeeId?: string;
+  employeeLocation?: EmployeeLocation;
+  expiresAt: number;
+}
+
+export interface LandingSite {
+  id: string;
+  key?: string;
+  name: string;
+  url: string;
+  color?: string;
+  icon?: string;
+  sort_order?: number;
+  active?: boolean;
+}
+
+interface VerifyCodeResponse {
+  type: 'user_sites' | 'admin' | 'client' | 'redirect' | null;
+  name?: string;
+  role?: string;
+  sites?: LandingSite[];
+  error?: string;
+  [k: string]: unknown;
+}
+
+const SESSION_KEY = 'ed_user_session';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dage
+
 interface AuthContextType {
-  user: User | null;
-  profile: OCCUser | null;
+  session: UserSession | null;
   employeeId: string | null;
   employeeLocation: EmployeeLocation;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => Promise<void>;
+  loginWithCode: (code: string) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function readSession(): UserSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as UserSession;
+    if (!s?.expiresAt || Date.now() > s.expiresAt) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return s;
+  } catch {
+    localStorage.removeItem(SESSION_KEY);
+    return null;
+  }
+}
+
+function writeSession(s: UserSession) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch {}
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<OCCUser | null>(null);
-  const [employeeId, setEmployeeId] = useState<string | null>(null);
-  const [employeeLocation, setEmployeeLocation] = useState<EmployeeLocation>(null);
+  const [session, setSession] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadProfile = async (authUser: User) => {
-    // Set fallback profile immediately
-    const fallback: OCCUser = {
-      id: authUser.id,
-      email: authUser.email || '',
-      role: 'INSTRUCTOR' as UserRole,
-      created_at: new Date().toISOString(),
-    };
-    setProfile(fallback);
-
-    // Fetch real profile + employee ID in background
-    const [dbProfile, empResult] = await Promise.all([
-      getUserProfile(authUser.id),
-      findEmployeeByEmail(authUser.email || ''),
-    ]);
-
-    if (dbProfile) setProfile(dbProfile);
-    setEmployeeId(empResult?.id ?? null);
-    setEmployeeLocation(empResult?.location ?? null);
-  };
-
+  // Restore session on mount
   useEffect(() => {
-    const init = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          await loadProfile(session.user);
-        }
-      } catch (e) {
-        console.error('Auth init error:', e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        loadProfile(newSession.user);
-      } else {
-        setProfile(null);
-        setEmployeeId(null);
-        setEmployeeLocation(null);
-      }
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    const s = readSession();
+    if (s) setSession(s);
+    setIsLoading(false);
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithCode = async (code: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length !== 4) {
+      return { success: false, error: 'Koden skal være 4 tegn' };
+    }
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.functions.invoke<VerifyCodeResponse>('ef-verify-code', {
+        body: { code: trimmed },
+      });
 
-      if (error) {
-        setIsLoading(false);
-        return { success: false, error: error.message };
+      if (error) throw error;
+      if (!data || data.type !== 'user_sites' || !data.name) {
+        return { success: false, error: 'Ukendt kode — prøv igen' };
       }
 
-      if (data.user) {
-        setUser(data.user);
-        await loadProfile(data.user);
+      // Only crew/admin employees proceed — we need an employee record to load jobs
+      if (data.role !== 'crew' && data.role !== 'admin') {
+        return { success: false, error: 'Denne kode giver ikke adgang til MY' };
       }
-      setIsLoading(false);
+
+      // Look up employee by navn — guarantees we have id + location for job lookups
+      const emp = await findEmployeeByName(data.name);
+      if (!emp) {
+        return { success: false, error: 'Bruger findes ikke i medarbejder-databasen' };
+      }
+
+      const next: UserSession = {
+        name: data.name,
+        role: data.role,
+        sites: data.sites || [],
+        employeeId: emp.id,
+        employeeLocation: emp.location,
+        expiresAt: Date.now() + SESSION_TTL_MS,
+      };
+      writeSession(next);
+      setSession(next);
       return { success: true };
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('loginWithCode error:', err);
+      return { success: false, error: 'Noget gik galt — tjek forbindelsen' };
+    } finally {
       setIsLoading(false);
-      return { success: false, error: 'Login fejlede' };
     }
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setEmployeeId(null);
-    setEmployeeLocation(null);
+  const signOut = () => {
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    setSession(null);
   };
 
   return (
     <AuthContext.Provider value={{
-      user,
-      profile,
-      employeeId,
-      employeeLocation,
+      session,
+      employeeId: session?.employeeId ?? null,
+      employeeLocation: session?.employeeLocation ?? null,
       isLoading,
-      isAuthenticated: !!user && !!profile,
-      signIn,
+      isAuthenticated: !!session?.employeeId,
+      loginWithCode,
       signOut,
     }}>
       {children}

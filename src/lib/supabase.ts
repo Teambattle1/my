@@ -1,28 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
-import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo, OCCUser } from '@/types';
+import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo } from '@/types';
 
 const supabaseUrl = 'https://ilbjytyukicbssqftmma.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsYmp5dHl1a2ljYnNzcWZ0bW1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MzA0NjEsImV4cCI6MjA3MDQwNjQ2MX0.I_PWByMPcOYhWgeq9MxXgOo-NCZYfEuzYmo35XnBFAY';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Auth via ef-verify-code (4-digit code) — we manage our own session in AuthContext,
+// so disable Supabase's built-in session persistence to avoid stale state.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 const TASK_JOB_SELECT = 'id, short_code, client_name, client_contact_name, client_contact_phone, client_contact_email, client_logo_url, client_website, agency, customer_number, customer_type, language, kun_tilbud, privat, event_date, event_end, event_time, duration_minutes, activities, activity_counts, activity_sessions, location_name, location_address, location_city, guests_count, instructors_count, assistants_count, get_in_location, get_in_time_storage, get_in_time_location, get_back_location, vehicle_id, trailer_id, lane_setup, lane_teardown, notes, task_notes, timing_note, crew_note, aktiviteter_note, gear_note, transport_note, bil_tankes, bil_oplades, bord_skaere_80, bord_folde_180, bord_folde_240, hoeje_cafeborde, dug_180, dug_240, dug_rund_80, opgave_id, opgave_status, status, skal_evalueres, evaluation_score, evaluation_notes, payment_method, payment_amount, payment_card_fee, payment_contact, faktura_sendt, mobilepay, mobilepay_amount, mobilepay_received, mobilepay_note, kontant_amount, kontant_received, kontant_note, ub_note, kunde_kontaktet, kunde_kontaktet_dato, kunde_kontaktet_note, location_kontaktet, location_kontaktet_dato, hotel_kontaktet, hotel_kontaktet_dato, hotel_kontaktet_note, firma_info, sms_sendt';
-
-// ── User Profile ──
-
-export async function getUserProfile(userId: string): Promise<OCCUser | null> {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, role, name, created_at, last_login')
-      .eq('id', userId)
-      .single();
-    if (error || !data) return null;
-    return data as OCCUser;
-  } catch {
-    return null;
-  }
-}
 
 // ── My Jobs ──
 
@@ -39,21 +27,13 @@ export function getCachedJobs(): TaskJob[] {
   }
 }
 
-/** Fetch all assigned jobs (no time limit), cache locally */
-export async function fetchMyJobs(userEmail: string): Promise<TaskJob[]> {
+/** Fetch all assigned jobs for a given employee, cache locally */
+export async function fetchMyJobs(employeeId: string): Promise<TaskJob[]> {
   try {
-    const { data: emp, error: empError } = await supabase
-      .from('employees')
-      .select('id')
-      .ilike('email', userEmail)
-      .single();
-
-    if (empError || !emp) return getCachedJobs();
-
     const { data: assignments, error: assignError } = await supabase
       .from('job_crew_assignments')
       .select('job_id')
-      .eq('employee_id', emp.id);
+      .eq('employee_id', employeeId);
 
     if (assignError || !assignments || assignments.length === 0) return [];
 
@@ -235,6 +215,21 @@ export async function findEmployeeByEmail(email: string): Promise<{ id: string; 
       .single();
     if (error || !data) return null;
     return { id: data.id, location: data.location || null };
+  } catch {
+    return null;
+  }
+}
+
+/** Look up an employee by navn — used after ef-verify-code returns the user's name. */
+export async function findEmployeeByName(navn: string): Promise<{ id: string; location: 'Øst' | 'Vest' | null } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('employees')
+      .select('id, location')
+      .eq('navn', navn)
+      .maybeSingle();
+    if (error || !data) return null;
+    return { id: data.id, location: (data.location as 'Øst' | 'Vest' | null) || null };
   } catch {
     return null;
   }
