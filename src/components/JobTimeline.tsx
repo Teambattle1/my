@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp, CloudSun, ClipboardCheck, Building2, ExternalLink, Plus, Globe } from 'lucide-react';
-import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob, findVenueForJob } from '@/lib/supabase';
-import type { VenueInfo } from '@/lib/supabase';
+import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob, findVenueForJob, fetchJobEvaluation } from '@/lib/supabase';
+import type { VenueInfo, EvaluationField } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildTimeline, calculateRoute, WAREHOUSES } from '@/lib/timelineBuilder';
 import { fmtDate, fmtShortDate, getTaskRegion } from '@/lib/helpers';
@@ -93,6 +93,84 @@ function MSubRow({ text, color }: { text: string; color: string }) {
 function MNoteRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return <div className="note-row"><span className="note-label">{label}: </span><span>{value}</span></div>;
+}
+
+/* ═══════════════════════════════════════════════
+   Evaluation row — read-only display of a FLOW template + its response value
+   ═══════════════════════════════════════════════ */
+
+function EvaluationRow({ field }: { field: EvaluationField }) {
+  const empty = field.value === null || field.value === '';
+
+  const renderValue = () => {
+    if (empty) return <span style={{ color: '#cbd5e1' }}>Ikke besvaret</span>;
+
+    if (field.field_type === 'boolean') {
+      const yes = field.value === 'true';
+      return (
+        <span style={{
+          fontWeight: 800,
+          color: yes ? '#b91c1c' : '#047857',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+        }}>
+          {yes ? 'Ja' : 'Nej'}
+        </span>
+      );
+    }
+
+    if (field.field_type === 'rating') {
+      const max = (field.field_options as { max?: number } | null)?.max ?? 5;
+      const n = Math.max(0, Math.min(max, Number(field.value) || 0));
+      return (
+        <span style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
+          {Array.from({ length: max }).map((_, i) => (
+            <span key={i} style={{ fontSize: 16, color: i < n ? '#f59e0b' : '#e5e7eb' }}>★</span>
+          ))}
+          <span style={{ marginLeft: 6, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+            {n}/{max}
+          </span>
+        </span>
+      );
+    }
+
+    if (field.field_type === 'number') {
+      return (
+        <span style={{ fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+          {field.value}
+        </span>
+      );
+    }
+
+    // text / select / default
+    return <span style={{ color: '#111827' }}>{field.value}</span>;
+  };
+
+  return (
+    <div style={{
+      padding: '8px 0',
+      borderBottom: '1px solid #fee2e2',
+    }}>
+      <div style={{
+        fontSize: 10,
+        fontWeight: 800,
+        color: '#991b1b',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        marginBottom: 3,
+      }}>
+        {field.title}
+      </div>
+      <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+        {renderValue()}
+      </div>
+      {field.description && !empty && (
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, fontStyle: 'italic' }}>
+          {field.description}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ═══════════════════════════════════════════════
@@ -344,6 +422,7 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const [weatherOpen, setWeatherOpen] = useState(false);
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [venueLoading, setVenueLoading] = useState(false);
+  const [evaluation, setEvaluation] = useState<EvaluationField[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -379,6 +458,12 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
       .then(v => setVenue(v))
       .finally(() => setVenueLoading(false));
   }, [job?.location_name, job?.location_address, job?.location_city]);
+
+  useEffect(() => {
+    if (!job) return;
+    const activityIds = Array.isArray(job.activities) ? job.activities : [];
+    fetchJobEvaluation(jobId, activityIds).then(setEvaluation);
+  }, [jobId, job?.activities]);
 
   if (loading || !job) {
     return (
@@ -559,6 +644,34 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           {timeline.dagSlutTime && <MRow label="Opgave slut" value={timeline.dagSlutTime} icon={<Clock size={14} />} bold />}
         </MobileSection>
 
+        {/* ── KUNDE ── */}
+        <MobileSection title="Kunde" color="orange" defaultOpen={false}>
+          <MRow label="Kunde" value={job.client_name} bold />
+          <MRow label="Type" value={job.customer_type?.toUpperCase()} />
+          <MRow label="Kontakt" value={job.client_contact_name} />
+          {job.client_contact_phone && (
+            <div className="row">
+              <span className="row-label">Tlf:</span>
+              <a href={`tel:${job.client_contact_phone}`} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+                <Phone size={12} style={{ display: 'inline', verticalAlign: -1, marginRight: 4 }} />
+                {job.client_contact_phone}
+              </a>
+            </div>
+          )}
+          {job.client_contact_email && (
+            <div className="row">
+              <span className="row-label">Email:</span>
+              <a href={`mailto:${job.client_contact_email}`} style={{ color: '#2563eb', textDecoration: 'none' }}>
+                <Mail size={12} style={{ display: 'inline', verticalAlign: -1, marginRight: 4 }} />
+                {job.client_contact_email}
+              </a>
+            </div>
+          )}
+          <MRow label="Bureau" value={job.agency} />
+          <MRow label="Kundenr." value={job.customer_number} />
+          <MRow label="Sprog" value={job.language} />
+        </MobileSection>
+
         {/* ── LOKATION ── */}
         <MobileSection title="Lokation" color="green" defaultOpen={true}>
           <MRow label="Sted" value={job.location_name} bold icon={<MapPin size={14} />} />
@@ -646,61 +759,6 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           {timeline.dur > 0 && <MRow label="Total" value={`${timeline.dur} min`} bold />}
         </MobileSection>
 
-        {/* ── CREW ── */}
-        <MobileSection title="Crew" color="blue" defaultOpen={true}>
-          <CrewPanel crew={crew} currentEmployeeId={employeeId} isLead={isLead} />
-        </MobileSection>
-
-        {/* ── TRANSPORT ── */}
-        <MobileSection title="Transport" color="blue" defaultOpen={true}>
-          <MRow label="Lager" value={warehouseLabel} bold icon={<Truck size={14} />} />
-          {primaryVehicle && (
-            <>
-              <MRow label="Bil" value={primaryVehicle.car_name} icon={<Truck size={14} />} />
-              {primaryVehicle.car_team_id && <MRow label="Team nr." value={`Hold ${primaryVehicle.car_team_id}`} bold />}
-              {primaryVehicle.trailer_name && <MRow label="Trailer" value={primaryVehicle.trailer_name} />}
-            </>
-          )}
-          {job.bil_tankes && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600, marginTop: 4 }}>Bil skal tankes</div>}
-          {job.bil_oplades && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600 }}>Bil skal oplades</div>}
-          {driveRoute && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6b7280' }}>Kørsel (én vej)</span>
-                <span style={{ fontWeight: 700 }}>{driveRoute.km} km / {driveRoute.min} min</span>
-              </div>
-            </div>
-          )}
-        </MobileSection>
-
-        {/* ── KUNDE ── */}
-        <MobileSection title="Kunde" color="orange" defaultOpen={false}>
-          <MRow label="Kunde" value={job.client_name} bold />
-          <MRow label="Type" value={job.customer_type?.toUpperCase()} />
-          <MRow label="Kontakt" value={job.client_contact_name} />
-          {job.client_contact_phone && (
-            <div className="row">
-              <span className="row-label">Tlf:</span>
-              <a href={`tel:${job.client_contact_phone}`} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
-                <Phone size={12} style={{ display: 'inline', verticalAlign: -1, marginRight: 4 }} />
-                {job.client_contact_phone}
-              </a>
-            </div>
-          )}
-          {job.client_contact_email && (
-            <div className="row">
-              <span className="row-label">Email:</span>
-              <a href={`mailto:${job.client_contact_email}`} style={{ color: '#2563eb', textDecoration: 'none' }}>
-                <Mail size={12} style={{ display: 'inline', verticalAlign: -1, marginRight: 4 }} />
-                {job.client_contact_email}
-              </a>
-            </div>
-          )}
-          <MRow label="Bureau" value={job.agency} />
-          <MRow label="Kundenr." value={job.customer_number} />
-          <MRow label="Sprog" value={job.language} />
-        </MobileSection>
-
         {/* ── PAKKELISTE ── */}
         <MobileSection title="Pakkeliste" color="green" defaultOpen={true}>
           <button
@@ -744,6 +802,33 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           )}
         </MobileSection>
 
+        {/* ── CREW ── */}
+        <MobileSection title="Crew" color="blue" defaultOpen={true}>
+          <CrewPanel crew={crew} currentEmployeeId={employeeId} isLead={isLead} />
+        </MobileSection>
+
+        {/* ── TRANSPORT ── */}
+        <MobileSection title="Transport" color="blue" defaultOpen={true}>
+          <MRow label="Lager" value={warehouseLabel} bold icon={<Truck size={14} />} />
+          {primaryVehicle && (
+            <>
+              <MRow label="Bil" value={primaryVehicle.car_name} icon={<Truck size={14} />} />
+              {primaryVehicle.car_team_id && <MRow label="Team nr." value={`Hold ${primaryVehicle.car_team_id}`} bold />}
+              {primaryVehicle.trailer_name && <MRow label="Trailer" value={primaryVehicle.trailer_name} />}
+            </>
+          )}
+          {job.bil_tankes && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600, marginTop: 4 }}>Bil skal tankes</div>}
+          {job.bil_oplades && <div style={{ fontSize: 13, color: '#b45309', fontWeight: 600 }}>Bil skal oplades</div>}
+          {driveRoute && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Kørsel (én vej)</span>
+                <span style={{ fontWeight: 700 }}>{driveRoute.km} km / {driveRoute.min} min</span>
+              </div>
+            </div>
+          )}
+        </MobileSection>
+
         {/* ── BORDE ── */}
         {tableItems.length > 0 && (
           <MobileSection title="Borde & Dug" color="green" defaultOpen={false}>
@@ -768,12 +853,23 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           </MobileSection>
         )}
 
-        {/* Evaluering reminder */}
-        {job.skal_evalueres && (
-          <div style={{ margin: '0 12px 16px', padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertTriangle size={18} color="#dc2626" />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#dc2626' }}>Husk evaluering!</span>
-          </div>
+        {/* ── EVALUERING (FLOW-felter for dette job) ── */}
+        {evaluation.length > 0 && (
+          <MobileSection title="Evaluering" color="red" defaultOpen={!!job.skal_evalueres}>
+            {job.skal_evalueres && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', marginBottom: 10,
+                borderRadius: 8, background: '#fef2f2', border: '1px solid #fca5a5',
+              }}>
+                <AlertTriangle size={16} color="#dc2626" />
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Husk evaluering
+                </span>
+              </div>
+            )}
+            {evaluation.map(f => <EvaluationRow key={f.id} field={f} />)}
+          </MobileSection>
         )}
 
         {/* Footer */}

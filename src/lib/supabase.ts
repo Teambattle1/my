@@ -220,6 +220,94 @@ export async function findEmployeeByEmail(email: string): Promise<{ id: string; 
   }
 }
 
+// ── Evaluation (FLOW) ──
+
+export interface EvaluationTemplate {
+  id: string;
+  title: string;
+  description: string | null;
+  field_type: 'boolean' | 'text' | 'number' | 'rating' | 'select' | string;
+  field_options: unknown;
+  is_global: boolean;
+  sort_order: number;
+}
+
+export interface EvaluationField extends EvaluationTemplate {
+  value: string | null;   // latest response value (any employee); null if unanswered
+  employee_id: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Pull evaluation templates + merged response values for a job.
+ * Returns globals first, then activity-specific templates.
+ */
+export async function fetchJobEvaluation(
+  jobId: string,
+  activityIds: string[] = [],
+): Promise<EvaluationField[]> {
+  try {
+    // 1. Global templates
+    const { data: globals, error: gErr } = await supabase
+      .from('evaluation_templates')
+      .select('id, title, description, field_type, field_options, is_global, sort_order')
+      .eq('is_global', true)
+      .order('sort_order', { ascending: true });
+    if (gErr) throw gErr;
+
+    // 2. Activity-specific templates
+    let activitySpecific: EvaluationTemplate[] = [];
+    if (activityIds.length > 0) {
+      const { data: links } = await supabase
+        .from('evaluation_template_activities')
+        .select('template_id')
+        .in('activity_id', activityIds);
+      const templateIds = [...new Set((links || []).map(l => l.template_id))];
+      if (templateIds.length > 0) {
+        const { data: tmpl } = await supabase
+          .from('evaluation_templates')
+          .select('id, title, description, field_type, field_options, is_global, sort_order')
+          .in('id', templateIds)
+          .order('sort_order', { ascending: true });
+        activitySpecific = (tmpl || []) as EvaluationTemplate[];
+      }
+    }
+
+    // 3. Responses for this job (any employee — MY just displays)
+    const { data: responses } = await supabase
+      .from('evaluation_responses')
+      .select('template_id, value, employee_id, updated_at')
+      .eq('job_id', jobId);
+
+    const respByTemplate: Record<string, { value: string; employee_id: string | null; updated_at: string | null }> = {};
+    (responses || []).forEach(r => {
+      // Prefer the most recently updated answer per template
+      const prev = respByTemplate[r.template_id];
+      if (!prev || (r.updated_at && r.updated_at > (prev.updated_at || ''))) {
+        respByTemplate[r.template_id] = {
+          value: r.value || '',
+          employee_id: r.employee_id,
+          updated_at: r.updated_at,
+        };
+      }
+    });
+
+    const merge = (t: EvaluationTemplate): EvaluationField => ({
+      ...t,
+      value: respByTemplate[t.id]?.value ?? null,
+      employee_id: respByTemplate[t.id]?.employee_id ?? null,
+      updated_at: respByTemplate[t.id]?.updated_at ?? null,
+    });
+
+    return [
+      ...((globals || []) as EvaluationTemplate[]).map(merge),
+      ...activitySpecific.map(merge),
+    ];
+  } catch {
+    return [];
+  }
+}
+
 // ── Venue (locations) ──
 
 export interface VenueInfo {
