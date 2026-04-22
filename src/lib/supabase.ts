@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo } from '@/types';
+import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo, JobActionCardBlock, MeetPoint } from '@/types';
 
 const supabaseUrl = 'https://ilbjytyukicbssqftmma.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsYmp5dHl1a2ljYnNzcWZ0bW1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MzA0NjEsImV4cCI6MjA3MDQwNjQ2MX0.I_PWByMPcOYhWgeq9MxXgOo-NCZYfEuzYmo35XnBFAY';
@@ -78,7 +78,7 @@ export async function fetchJobCrew(jobId: string): Promise<CrewAssignment[]> {
   try {
     const { data, error } = await supabase
       .from('job_crew_assignments')
-      .select('role, employee_id')
+      .select('id, role, employee_id, is_lead, meet_point, meet_point_note, personal_get_in, personal_get_out')
       .eq('job_id', jobId);
 
     if (error || !data || data.length === 0) return [];
@@ -94,16 +94,66 @@ export async function fetchJobCrew(jobId: string): Promise<CrewAssignment[]> {
       empMap[e.id] = { navn: e.navn || e.id, telefon: e.telefon || null, email: e.email || null };
     });
 
-    return data.map(d => ({
+    return data.map((d: any) => ({
+      id: d.id,
       employee_id: d.employee_id,
       employee_name: empMap[d.employee_id]?.navn || d.employee_id,
       employee_phone: empMap[d.employee_id]?.telefon || null,
       employee_email: empMap[d.employee_id]?.email || null,
       role: d.role || 'instrukt\u00f8r',
+      is_lead: Boolean(d.is_lead),
+      meet_point: (d.meet_point ?? 'lager') as MeetPoint,
+      meet_point_note: d.meet_point_note ?? null,
+      personal_get_in: d.personal_get_in ?? null,
+      personal_get_out: d.personal_get_out ?? null,
     }));
   } catch {
     return [];
   }
+}
+
+// ── ActionCard blocks (WORK integration) ──
+
+/**
+ * Fetch all ActionCard blocks for every crew-row on a given job, with the
+ * library block joined in. Returns [] on error.
+ */
+export async function fetchJobActionCardBlocks(jobId: string): Promise<JobActionCardBlock[]> {
+  try {
+    const { data: crew, error: crewErr } = await supabase
+      .from('job_crew_assignments')
+      .select('id')
+      .eq('job_id', jobId);
+    if (crewErr || !crew || crew.length === 0) return [];
+
+    const crewIds = crew.map((c: any) => c.id);
+    const { data, error } = await supabase
+      .from('job_action_card_blocks')
+      .select(
+        'id, job_crew_assignment_id, library_block_id, override_title, override_body, sort_order, library_block:library_block_id(id, kind, title, body, activity_id, default_duration_minutes)'
+      )
+      .in('job_crew_assignment_id', crewIds)
+      .order('sort_order', { ascending: true });
+    if (error || !data) return [];
+    return data as unknown as JobActionCardBlock[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Derive personal get-in / get-out timestamps with fallback to job defaults,
+ * matching the same logic as WORK.
+ */
+export function derivePersonalTimeline(
+  crew: Pick<CrewAssignment, 'meet_point' | 'personal_get_in' | 'personal_get_out'>,
+  job: Pick<TaskJob, 'get_in_time_storage' | 'get_in_time_location' | 'event_end'>
+): { get_in: string | null; get_out: string | null; point: MeetPoint } {
+  const point = crew.meet_point ?? 'lager';
+  const jobStart = point === 'location' ? job.get_in_time_location : job.get_in_time_storage;
+  const get_in = crew.personal_get_in ?? (point === 'other' ? null : jobStart);
+  const get_out = crew.personal_get_out ?? (point === 'other' ? null : job.event_end);
+  return { get_in, get_out, point };
 }
 
 // ── Vehicle Assignments ──

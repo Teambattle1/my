@@ -92,12 +92,41 @@ export interface TaskJob {
   sms_sendt: string | null;
 }
 
+export type MeetPoint = 'lager' | 'location' | 'other';
+
 export interface CrewAssignment {
+  id: string;
   employee_id: string;
   employee_name: string;
   employee_phone: string | null;
   employee_email: string | null;
   role: string;
+  is_lead: boolean;
+  meet_point: MeetPoint;
+  meet_point_note: string | null;
+  personal_get_in: string | null;
+  personal_get_out: string | null;
+}
+
+export type ActionBlockKind = 'battlestation' | 'station' | 'rolle' | 'brief' | 'free';
+
+export interface ActionLibraryBlock {
+  id: string;
+  kind: ActionBlockKind;
+  title: string;
+  body: string | null;
+  activity_id: string | null;
+  default_duration_minutes: number | null;
+}
+
+export interface JobActionCardBlock {
+  id: string;
+  job_crew_assignment_id: string;
+  library_block_id: string | null;
+  override_title: string | null;
+  override_body: string | null;
+  sort_order: number;
+  library_block: ActionLibraryBlock | null;
 }
 
 export interface VehicleAssignment {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Printer, Loader2, MapPin, Clock, Truck, Package, AlertTriangle, Users as UsersIcon, Phone, Mail, ChevronDown, ChevronUp, CloudSun, ClipboardCheck, Building2, ExternalLink, Plus, Globe } from 'lucide-react';
-import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob, findVenueForJob, fetchJobEvaluation } from '@/lib/supabase';
+import { fetchJobById, fetchJobCrew, fetchJobVehicles, fetchJobPackingItems, fetchJobGear, fetchActivityInfo, fetchMyRoleOnJob, findVenueForJob, fetchJobEvaluation, fetchJobActionCardBlocks, derivePersonalTimeline } from '@/lib/supabase';
 import type { VenueInfo, EvaluationField } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildTimeline, calculateRoute, WAREHOUSES } from '@/lib/timelineBuilder';
@@ -10,7 +10,7 @@ import TimelineBar from './TimelineBar';
 import CrewPanel from './CrewPanel';
 import WeatherDashboard from './Weather/WeatherDashboard';
 import CheckEmbed from './CheckEmbed';
-import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo, RouteInfo } from '@/types';
+import type { TaskJob, CrewAssignment, VehicleAssignment, JobPackingItem, GearAssignment, ActivityInfo, RouteInfo, JobActionCardBlock } from '@/types';
 
 /* ═══════════════════════════════════════════════
    CSS — mobile-first + print A4
@@ -402,6 +402,282 @@ function PNoteRow({ label, value }: { label: string; value?: string | null }) {
 }
 
 /* ═══════════════════════════════════════════════
+   ActionCard helpers (WORK integration)
+   ═══════════════════════════════════════════════ */
+
+const MEET_POINT_LABEL: Record<string, { label: string; badge: string }> = {
+  lager: { label: 'Kører fra lager', badge: 'LAGER' },
+  location: { label: 'Møder på location', badge: 'LOCATION' },
+  other: { label: 'Aftalt mødested', badge: 'ANDET' },
+};
+
+function fmtDateTime(ts: string | null | undefined): string {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleString('da-DK', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function MeetPointCard({
+  crew,
+  personal,
+  job,
+  isLead,
+}: {
+  crew: CrewAssignment;
+  personal: { get_in: string | null; get_out: string | null; point: string } | null;
+  job: TaskJob;
+  isLead: boolean;
+}) {
+  const mp = MEET_POINT_LABEL[crew.meet_point] ?? MEET_POINT_LABEL.lager;
+  const point = personal?.point ?? crew.meet_point;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: 'inline-block',
+          padding: '4px 10px',
+          background: point === 'location' ? '#fb923c' : point === 'other' ? '#fcd34d' : '#e5e7eb',
+          color: '#111',
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          borderRadius: 999,
+          marginBottom: 8,
+        }}
+      >
+        {mp.badge}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 6 }}>
+        {mp.label}
+        {isLead && (
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '0.1em',
+              color: '#fff',
+              background: '#ea580c',
+              padding: '2px 8px',
+              borderRadius: 999,
+            }}
+          >
+            LEAD
+          </span>
+        )}
+      </div>
+      {crew.meet_point_note && (
+        <div
+          style={{
+            fontSize: 13,
+            color: '#374151',
+            background: '#fff7ed',
+            border: '1px solid #fdba74',
+            borderRadius: 8,
+            padding: '8px 10px',
+            marginBottom: 10,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {crew.meet_point_note}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Get-in
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#111', fontFamily: 'monospace' }}>
+            {fmtDateTime(personal?.get_in)}
+          </div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+            {point === 'location'
+              ? job.location_name ?? 'På location'
+              : point === 'other'
+                ? crew.meet_point_note ?? 'Aftalt sted'
+                : job.get_in_location ?? 'Lager'}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Get-out
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#111', fontFamily: 'monospace' }}>
+            {fmtDateTime(personal?.get_out)}
+          </div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+            {point === 'location' ? 'Retur direkte' : 'Nedpak / retur til lager'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionBlocksList({ blocks }: { blocks: JobActionCardBlock[] }) {
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {blocks.map((b, i) => {
+        const title = b.override_title ?? b.library_block?.title ?? '(uden titel)';
+        const body = b.override_body ?? b.library_block?.body ?? '';
+        const kind = b.library_block?.kind ?? 'free';
+        return (
+          <div
+            key={b.id}
+            style={{
+              border: '1.5px solid #ea580c',
+              borderRadius: 10,
+              overflow: 'hidden',
+              background: '#fff',
+            }}
+          >
+            <div
+              style={{
+                background: '#ea580c',
+                color: '#fff',
+                padding: '6px 12px',
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ opacity: 0.85 }}>{String(i + 1).padStart(2, '0')}</span>
+              <span>{kind}</span>
+              {b.library_block?.activity_id && (
+                <span style={{ marginLeft: 'auto', opacity: 0.85 }}>
+                  {b.library_block.activity_id}
+                </span>
+              )}
+            </div>
+            <div style={{ padding: '10px 12px 4px', fontSize: 15, fontWeight: 700, color: '#111' }}>
+              {title}
+            </div>
+            {body && (
+              <div
+                style={{
+                  padding: '0 12px 12px',
+                  fontSize: 13,
+                  color: '#374151',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {body}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LeadCrewOverview({
+  crew,
+  actionCardBlocks,
+  job,
+  currentEmployeeId,
+}: {
+  crew: CrewAssignment[];
+  actionCardBlocks: JobActionCardBlock[];
+  job: TaskJob;
+  currentEmployeeId: string | null;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const others = crew.filter(c => c.employee_id !== currentEmployeeId);
+  if (others.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: '1px dashed #fdba74',
+      }}
+    >
+      <div style={{ fontSize: 10, fontWeight: 800, color: '#c2410c', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+        Lead-overblik — crew's ActionCards
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {others.map(c => {
+          const crewBlocks = actionCardBlocks
+            .filter(b => b.job_crew_assignment_id === c.id)
+            .sort((a, b) => a.sort_order - b.sort_order);
+          const personal = derivePersonalTimeline(c, job);
+          const mp = MEET_POINT_LABEL[c.meet_point] ?? MEET_POINT_LABEL.lager;
+          const isOpen = expandedId === c.id;
+          return (
+            <div
+              key={c.id}
+              style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: 10,
+                background: '#fff',
+                overflow: 'hidden',
+              }}
+            >
+              <button
+                onClick={() => setExpandedId(isOpen ? null : c.id)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
+                  background: isOpen ? '#fff7ed' : '#fff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>
+                    {c.employee_name}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>
+                    {c.role} · {mp.label} · Get-in {fmtDateTime(personal.get_in)}
+                    {crewBlocks.length > 0 && ` · ${crewBlocks.length} blok${crewBlocks.length === 1 ? '' : 'ke'}`}
+                  </div>
+                </div>
+                {isOpen ? <ChevronUp size={16} color="#c2410c" /> : <ChevronDown size={16} color="#6b7280" />}
+              </button>
+              {isOpen && (
+                <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f3f4f6' }}>
+                  {c.meet_point_note && (
+                    <div style={{ fontSize: 12, color: '#374151', marginBottom: 8, fontStyle: 'italic' }}>
+                      ↳ {c.meet_point_note}
+                    </div>
+                  )}
+                  {crewBlocks.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Ingen blokke tildelt.</div>
+                  ) : (
+                    <ActionBlocksList blocks={crewBlocks} />
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
    Main component
    ═══════════════════════════════════════════════ */
 
@@ -423,16 +699,19 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [venueLoading, setVenueLoading] = useState(false);
   const [evaluation, setEvaluation] = useState<EvaluationField[]>([]);
+  const [actionCardBlocks, setActionCardBlocks] = useState<JobActionCardBlock[]>([]);
 
   useEffect(() => {
     setLoading(true);
     (async () => {
       try {
-        const [j, cr, vh, pk, gr] = await Promise.all([
+        const [j, cr, vh, pk, gr, blocks] = await Promise.all([
           fetchJobById(jobId), fetchJobCrew(jobId), fetchJobVehicles(jobId),
           fetchJobPackingItems(jobId), fetchJobGear(jobId),
+          fetchJobActionCardBlocks(jobId),
         ]);
         setJob(j); setCrew(cr); setVehicles(vh); setPackingItems(pk); setGear(gr);
+        setActionCardBlocks(blocks);
         if (j?.activities?.length) { setActivityInfos(await fetchActivityInfo(j.activities)); }
         if (employeeId) { setMyRole(await fetchMyRoleOnJob(jobId, employeeId)); }
       } catch (e) { console.error('Load error:', e); }
@@ -479,7 +758,14 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
   const region = getTaskRegion(job.location_address) ?? getTaskRegion(job.location_city);
   const effectiveRegion = employeeLocation ? (employeeLocation === 'Øst' ? 'øst' : 'vest') as 'øst' | 'vest' : region;
   const timeline = buildTimeline(job, activityInfos, routeInfo, effectiveRegion);
-  const isLead = myRole === 'lead' || myRole === 'teamlead';
+  const myCrew = employeeId ? crew.find(c => c.employee_id === employeeId) ?? null : null;
+  const isLead = (myCrew?.is_lead ?? false) || myRole === 'lead' || myRole === 'teamlead';
+  const myBlocks = myCrew
+    ? actionCardBlocks
+        .filter(b => b.job_crew_assignment_id === myCrew.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+    : [];
+  const myPersonal = myCrew ? derivePersonalTimeline(myCrew, job) : null;
   const warehouseLabel = effectiveRegion === 'øst' ? WAREHOUSES.sjaelland.label : WAREHOUSES.jylland.label;
   const driveRoute = routeInfo ? (effectiveRegion === 'øst' ? routeInfo.sjaelland : routeInfo.jylland) : null;
   const primaryVehicle = vehicles[0];
@@ -619,6 +905,24 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── DIT MØDESTED ── */}
+        {myCrew && (
+          <MobileSection
+            title={isLead ? 'Dit mødested (LEAD)' : 'Dit mødested'}
+            color="orange"
+            defaultOpen={true}
+          >
+            <MeetPointCard crew={myCrew} personal={myPersonal} job={job} isLead={isLead} />
+          </MobileSection>
+        )}
+
+        {/* ── DINE OPGAVER (ActionCard blokke) ── */}
+        {myBlocks.length > 0 && (
+          <MobileSection title={`Dine opgaver (${myBlocks.length})`} color="orange" defaultOpen={true}>
+            <ActionBlocksList blocks={myBlocks} />
+          </MobileSection>
         )}
 
         {/* ── TID & DATO ── */}
@@ -805,6 +1109,42 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
         {/* ── CREW ── */}
         <MobileSection title="Crew" color="blue" defaultOpen={true}>
           <CrewPanel crew={crew} currentEmployeeId={employeeId} isLead={isLead} />
+          {isLead && crew.length > 1 && (
+            <LeadCrewOverview
+              crew={crew}
+              actionCardBlocks={actionCardBlocks}
+              job={job}
+              currentEmployeeId={employeeId}
+            />
+          )}
+          {isLead && (
+            <a
+              className="no-print"
+              href={`https://work.eventday.dk/job/${jobId}/actioncards`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                marginTop: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '11px 14px',
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #ea580c 0%, #fb923c 100%)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 900,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                textDecoration: 'none',
+                boxSizing: 'border-box',
+              }}
+            >
+              <Printer size={16} /> Print alle ActionCards
+            </a>
+          )}
         </MobileSection>
 
         {/* ── TRANSPORT ── */}
