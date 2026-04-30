@@ -34,6 +34,7 @@ export interface TaskJob {
   location_name: string | null;
   location_address: string | null;
   location_city: string | null;
+  post_session_destination: string | null;
   guests_count: number | null;
   instructors_count: number | null;
   assistants_count: number | null;
@@ -90,6 +91,9 @@ export interface TaskJob {
   hotel_kontaktet_note: string | null;
   firma_info: string | null;
   sms_sendt: string | null;
+  winner_ceremony: boolean | null;
+  winner_ceremony_note: string | null;
+  teamsize_note: string | null;
 }
 
 export type MeetPoint = 'lager' | 'location' | 'other';

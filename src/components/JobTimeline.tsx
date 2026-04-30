@@ -941,6 +941,9 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           <MRow label="Session start" value={timeline.gamestartTime} icon={<Clock size={14} />} bold />
           <MRow label="Varighed" value={timeline.dur > 0 ? (timeline.maxSessions > 1 ? `${durPerSession} min × ${timeline.maxSessions} = ${timeline.dur} min` : `${timeline.dur} min`) : null} />
           <MRow label="Session slut" value={timeline.endTime !== '—' ? timeline.endTime : null} icon={<Clock size={14} />} bold />
+          {job.post_session_destination && (
+            <MRow label="Efter session" value={job.post_session_destination} />
+          )}
           <div style={{ height: 4, borderTop: '1px solid #f3f4f6', marginTop: 4 }} />
           {timeline.teardownTimeSum > 0 && <MSubRow text={`Nedpakning: ${timeline.teardownTimeSum} min`} color="#1d4ed8" />}
           {driveRoute && <MSubRow text={`Retur kørsel: ${driveRoute.min} min (${driveRoute.km} km)`} color="#a16207" />}
@@ -976,10 +979,49 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
           <MRow label="Sprog" value={job.language} />
         </MobileSection>
 
+        {/* ── 5 HURTIGE OM TEAMEVENTET ── */}
+        {(job.winner_ceremony != null || job.winner_ceremony_note || job.teamsize_note) && (
+          <MobileSection title="5 hurtige om teameventet" color="orange" defaultOpen={true}>
+            {job.winner_ceremony != null && (
+              <div className="row">
+                <span className="row-label">Kåring af vinder:</span>
+                <span
+                  className="row-value bold"
+                  style={{
+                    color: job.winner_ceremony ? '#047857' : '#991b1b',
+                    background: job.winner_ceremony ? '#ecfdf5' : '#fef2f2',
+                    padding: '2px 10px',
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  {job.winner_ceremony ? 'Ja' : 'Nej'}
+                </span>
+              </div>
+            )}
+            {job.winner_ceremony_note && (
+              <div className="note-row">
+                <div className="note-label">Vinder-note</div>
+                <div>{job.winner_ceremony_note}</div>
+              </div>
+            )}
+            {job.teamsize_note && (
+              <div className="note-row" style={{ marginTop: 8 }}>
+                <div className="note-label">Teamstørrelse og hvorfor</div>
+                <div>{job.teamsize_note}</div>
+              </div>
+            )}
+          </MobileSection>
+        )}
+
         {/* ── LOKATION ── */}
         <MobileSection title="Lokation" color="green" defaultOpen={true}>
           <MRow label="Sted" value={job.location_name} bold icon={<MapPin size={14} />} />
           <MRow label="Adresse" value={job.location_address} />
+          {job.post_session_destination && (
+            <MRow label="Efter session" value={job.post_session_destination} />
+          )}
           {(job.location_city || job.location_address) && (
             <button
               className="no-print"
@@ -1327,6 +1369,24 @@ export default function JobTimeline({ jobId, onBack }: JobTimelineProps) {
               {job.bil_tankes && <div style={{ fontSize: '8pt', color: '#b45309', fontWeight: 600 }}>Bil skal tankes</div>}
               {job.bil_oplades && <div style={{ fontSize: '8pt', color: '#b45309', fontWeight: 600 }}>Bil skal oplades</div>}
             </PrintSection>
+
+            {(job.winner_ceremony != null || job.winner_ceremony_note || job.teamsize_note) && (
+              <PrintSection title="5 hurtige om teameventet" color="orange">
+                {job.winner_ceremony != null && (
+                  <PRow label="Vinder" value={job.winner_ceremony ? 'Ja, kåres' : 'Nej'} bold />
+                )}
+                {job.winner_ceremony_note && (
+                  <div style={{ fontSize: '8pt', marginTop: 2 }}>
+                    <strong style={{ color: '#6b7280' }}>Vinder-note:</strong> {job.winner_ceremony_note}
+                  </div>
+                )}
+                {job.teamsize_note && (
+                  <div style={{ fontSize: '8pt', marginTop: 4 }}>
+                    <strong style={{ color: '#6b7280' }}>Teamstørrelse:</strong> {job.teamsize_note}
+                  </div>
+                )}
+              </PrintSection>
+            )}
           </div>
 
           {/* Print timeline */}
