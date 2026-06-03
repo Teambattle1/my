@@ -547,3 +547,35 @@ export async function fetchToolboxSites(): Promise<ToolboxSite[]> {
     return getCachedToolboxSites();
   }
 }
+
+// ── SSO (cross-app single login via shared .eventday.dk cookie) ──
+
+export interface SsoIdentity {
+  name: string;
+  role: string;
+  employeeId: string | null;
+}
+
+/** Verify a shared SSO token through the ef-verify-session edge function. */
+export async function verifySsoToken(token: string): Promise<SsoIdentity | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      valid: boolean; name?: string; role?: string; employeeId?: string | null;
+    }>('ef-verify-session', { body: { token } });
+    if (error || !data || !data.valid || !data.name) return null;
+    return { name: data.name, role: data.role || 'crew', employeeId: data.employeeId ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** Look up an employee's location by id — used during SSO auto-login. */
+export async function findEmployeeLocationById(id: string): Promise<'Øst' | 'Vest' | null> {
+  try {
+    const { data, error } = await supabase.from('employees').select('location').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    return (data.location as 'Øst' | 'Vest' | null) || null;
+  } catch {
+    return null;
+  }
+}
