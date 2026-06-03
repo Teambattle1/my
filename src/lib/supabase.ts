@@ -500,6 +500,7 @@ export const TOOLBOX_MODULES: { key: string; name: string; url: string }[] = [
   { key: 'venue', name: 'VENUE', url: 'https://venue.eventday.dk' },
   { key: 'games', name: 'GAMES', url: 'https://games.eventday.dk' },
   { key: 'learn', name: 'LEARN', url: 'https://learn.eventday.dk' },
+  { key: 'gear',  name: 'GEAR',  url: 'https://gear.eventday.dk' },
 ];
 
 const TOOLBOX_CACHE_KEY = 'my_toolbox_sites';
