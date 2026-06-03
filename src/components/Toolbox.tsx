@@ -10,10 +10,26 @@ interface ToolboxProps {
 
 const ORANGE = '#ea580c';
 
+/**
+ * Nogle landing_sites-ikoner er inline-SVG data-URLs med det non-standard
+ * ";utf8,"-præfiks og ukodet markup (fx LEARN), som kan vises ødelagt i
+ * Safari/Firefox <img>. Normalisér dem til en korrekt procent-kodet data-URL.
+ * PNG/base64 og almindelige URLs sendes uændret igennem.
+ */
+function normalizeIcon(icon: string): string {
+  if (!icon.startsWith('data:image/svg+xml')) return icon;
+  const comma = icon.indexOf(',');
+  if (comma === -1) return icon;
+  let body = icon.slice(comma + 1);
+  if (!body.trimStart().startsWith('<')) return icon; // allerede procent-kodet
+  try { body = decodeURIComponent(body); } catch { /* behold rå markup */ }
+  return 'data:image/svg+xml,' + encodeURIComponent(body);
+}
+
 /** Byg key→icon-map ud fra et sæt sites (kun rækker der faktisk har et ikon). */
 function iconMap(sites: { key: string; icon: string | null }[]): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const s of sites) if (s.icon) map[s.key] = s.icon;
+  for (const s of sites) if (s.icon) map[s.key] = normalizeIcon(s.icon);
   return map;
 }
 
