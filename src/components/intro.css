@@ -65,22 +65,18 @@
 }
 
 .intro-sub {
-  color: #888;
-  font-size: 18px;
-  letter-spacing: 4px;
-  margin-top: 15px;
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 3px;
+  margin-top: 14px;
   opacity: 0;
   animation: intro-slide 1s ease 1.8s forwards;
 }
 .intro-sub .by {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.6);
 }
 .intro-sub .w {
   color: #fff;
-  font-weight: bold;
-}
-.intro-sub .o {
-  color: #ff6600;
   font-weight: bold;
 }
 @keyframes intro-slide {
