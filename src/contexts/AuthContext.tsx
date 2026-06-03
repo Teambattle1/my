@@ -73,7 +73,7 @@ function writeSession(s: UserSession) {
 // Lille signeret token (navn/rolle/employee-id). Skrives ved login og læses ved
 // opstart, så ét login gælder på tværs af *.eventday.dk-apperne.
 const SSO_COOKIE = 'eventday_sso';
-const SSO_COOKIE_MAX_AGE = 12 * 60 * 60; // 12 timer — matcher tokenets udløb
+const SSO_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 dage — matcher tokenets udløb
 
 /** Cookie sættes på .eventday.dk i produktion; host-only på localhost. */
 function ssoCookieDomain(): string {
