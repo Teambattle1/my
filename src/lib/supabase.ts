@@ -477,3 +477,71 @@ export async function fetchMyRoleOnJob(jobId: string, employeeId: string): Promi
     return null;
   }
 }
+
+// \u2500\u2500 Toolbox launcher (landing_sites) \u2500\u2500
+
+export interface ToolboxSite {
+  key: string;
+  name: string;
+  url: string;
+  icon: string | null;   // PNG som data-URL fra landing_sites (null = vis monogram-fallback)
+}
+
+/**
+ * De moduler MY's v\u00e6rkt\u00f8jskasse altid viser \u2014 i fast r\u00e6kkef\u00f8lge for ALLE brugere.
+ * `key` matcher `landing_sites.key`; `name`/`url` bruges som fallback hvis
+ * DB-r\u00e6kken ikke kan hentes (offline / RLS), s\u00e5 de 6 felter altid vises.
+ */
+export const TOOLBOX_MODULES: { key: string; name: string; url: string }[] = [
+  { key: 'my',    name: 'MY',    url: 'https://my.eventday.dk' },
+  { key: 'work',  name: 'WORK',  url: 'https://work.eventday.dk' },
+  { key: 'music', name: 'MUSIC', url: 'https://music.eventday.dk' },
+  { key: 'media', name: 'MEDIA', url: 'https://media.eventday.dk' },
+  { key: 'venue', name: 'VENUE', url: 'https://venue.eventday.dk' },
+  { key: 'games', name: 'GAMES', url: 'https://games.eventday.dk' },
+];
+
+const TOOLBOX_CACHE_KEY = 'my_toolbox_sites';
+
+/** Cachede toolbox-sites fra localStorage (instant load, ingen ikon-flicker). */
+export function getCachedToolboxSites(): ToolboxSite[] {
+  try {
+    const raw = localStorage.getItem(TOOLBOX_CACHE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as ToolboxSite[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Henter de 6 toolbox-moduler fra landing_sites (rigtige ikoner), i den faste
+ * TOOLBOX_MODULES-r\u00e6kkef\u00f8lge. Falder tilbage til cache ved fejl.
+ */
+export async function fetchToolboxSites(): Promise<ToolboxSite[]> {
+  const keys = TOOLBOX_MODULES.map(m => m.key);
+  try {
+    const { data, error } = await supabase
+      .from('landing_sites')
+      .select('key, name, url, icon')
+      .in('key', keys)
+      .eq('active', true);
+    if (error || !data) return getCachedToolboxSites();
+
+    const byKey = new Map(data.map((s: any) => [s.key, s]));
+    const ordered: ToolboxSite[] = TOOLBOX_MODULES.map(m => {
+      const row = byKey.get(m.key) as any;
+      return {
+        key: m.key,
+        name: row?.name || m.name,
+        url: row?.url || m.url,
+        icon: row?.icon ?? null,
+      };
+    });
+
+    try { localStorage.setItem(TOOLBOX_CACHE_KEY, JSON.stringify(ordered)); } catch {}
+    return ordered;
+  } catch {
+    return getCachedToolboxSites();
+  }
+}

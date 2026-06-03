@@ -18,11 +18,25 @@
   }
 }
 
+.intro-kicker {
+  font-size: clamp(13px, 3.6vw, 19px);
+  font-weight: 600;
+  letter-spacing: clamp(2px, 1.2vw, 5px);
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 12px;
+  text-align: center;
+  opacity: 0;
+  animation: intro-slide 1s ease 0.15s forwards;
+}
 .intro-logo {
-  font-size: 72px;
+  font-size: clamp(30px, 8.5vw, 72px);
   font-weight: bold;
-  letter-spacing: 8px;
+  letter-spacing: clamp(1px, 1vw, 8px);
   text-transform: uppercase;
+  text-align: center;
+  line-height: 1.05;
+  white-space: nowrap;
+  padding: 0 12px;
   opacity: 0;
   animation: intro-zoom 1.5s ease 0.3s forwards;
 }

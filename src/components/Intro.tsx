@@ -74,9 +74,11 @@ export default function Intro() {
           />
         ))}
       </div>
+      <div className="intro-kicker">WELCOME to</div>
       <div className="intro-logo">
         <span className="w">M</span>
         <span className="o">Y</span>
+        <span className="w">{' '}EVENTDAY</span>
       </div>
       <div className="intro-sub">
         <span className="by">by </span>

@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import LoginScreen from '@/components/LoginScreen';
+import Toolbox from '@/components/Toolbox';
 import JobsList from '@/components/JobsList';
 import JobTimeline from '@/components/JobTimeline';
 import { useJobRoute } from '@/hooks/useJobRoute';
@@ -28,6 +29,7 @@ export default function App() {
     return <LoginScreen />;
   }
 
+  // Deep-link til en konkret opgave virker uanset hvilket modul man kom fra
   if (route.job) {
     return (
       <JobTimeline
@@ -37,5 +39,16 @@ export default function App() {
     );
   }
 
-  return <JobsList onJobSelected={(id) => setRoute({ job: id })} />;
+  // MY-modulet: den klassiske job-liste
+  if (route.app === 'my') {
+    return (
+      <JobsList
+        onJobSelected={(id) => setRoute({ job: id })}
+        onBackToToolbox={() => setRoute({ app: null })}
+      />
+    );
+  }
+
+  // Standard landing efter login: værktøjskassen med alle moduler
+  return <Toolbox onOpenMy={() => setRoute({ app: 'my' })} />;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Calendar, MapPin, Users, Clock, Loader2, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Loader2, ChevronRight, ChevronDown, LogOut, LayoutGrid } from 'lucide-react';
 import { fetchMyJobs, fetchActivityInfo, getCachedJobs } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { fmtDate, getRelativeDay, getDanishWeekday } from '@/lib/helpers';
@@ -15,6 +15,7 @@ interface WeatherTarget {
 
 interface JobsListProps {
   onJobSelected: (jobId: string) => void;
+  onBackToToolbox: () => void;
 }
 
 /** Live 24-hour clock — ticks every second. */
@@ -84,7 +85,7 @@ function groupJobs(jobs: TaskJob[]): { month: string; weeks: { week: number; dat
   }));
 }
 
-export default function JobsList({ onJobSelected }: JobsListProps) {
+export default function JobsList({ onJobSelected, onBackToToolbox }: JobsListProps) {
   const { session, employeeId, signOut } = useAuth();
   const [jobs, setJobs] = useState<TaskJob[]>([]);
   const [activityMap, setActivityMap] = useState<Record<string, ActivityInfo>>({});
@@ -185,7 +186,28 @@ export default function JobsList({ onJobSelected }: JobsListProps) {
         {/* Center: live 24h clock */}
         <LiveClock />
 
-        {/* Right: log out icon */}
+        {/* Right: toolbox + log out */}
+        <button
+          onClick={onBackToToolbox}
+          aria-label="Værktøjskasse"
+          title="Værktøjskasse"
+          style={{
+            width: 38,
+            height: 38,
+            padding: 0,
+            background: 'transparent',
+            border: '1px solid #334155',
+            borderRadius: 10,
+            color: '#ffffff',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <LayoutGrid size={16} />
+        </button>
         <button
           onClick={signOut}
           aria-label="Log ud"
