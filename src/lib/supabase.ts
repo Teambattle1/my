@@ -490,18 +490,19 @@ export interface ToolboxSite {
 /**
  * De moduler MY's v\u00e6rkt\u00f8jskasse altid viser \u2014 i fast r\u00e6kkef\u00f8lge for ALLE brugere.
  * `key` matcher `landing_sites.key`; `name`/`url` bruges som fallback hvis
- * DB-r\u00e6kken ikke kan hentes (offline / RLS), s\u00e5 de 6 felter altid vises.
+ * DB-r\u00e6kken ikke kan hentes (offline / RLS), s\u00e5 modulerne altid vises.
+ * `desc` er en kort explainer der vises under knappens navn.
  */
-export const TOOLBOX_MODULES: { key: string; name: string; url: string }[] = [
-  { key: 'my',    name: 'MY',    url: 'https://my.eventday.dk' },
-  { key: 'work',  name: 'WORK',  url: 'https://work.eventday.dk' },
-  { key: 'music', name: 'MUSIC', url: 'https://music.eventday.dk' },
-  { key: 'media', name: 'MEDIA', url: 'https://media.eventday.dk' },
-  { key: 'venue', name: 'VENUE', url: 'https://venue.eventday.dk' },
-  { key: 'games', name: 'GAMES', url: 'https://games.eventday.dk' },
-  { key: 'learn',   name: 'LEARN',   url: 'https://learn.eventday.dk' },
-  { key: 'gear',    name: 'GEAR',    url: 'https://gear.eventday.dk' },
-  { key: 'welcome', name: 'WELCOME', url: 'https://welcome.eventday.dk' },
+export const TOOLBOX_MODULES: { key: string; name: string; url: string; desc: string }[] = [
+  { key: 'my',      name: 'MY DAY',  url: 'https://my.eventday.dk',      desc: 'Dine opgaver og vagter' },
+  { key: 'work',    name: 'WORK',    url: 'https://work.eventday.dk',    desc: 'Job-tracker og ruteplan' },
+  { key: 'music',   name: 'MUSIC',   url: 'https://music.eventday.dk',   desc: 'Playlists og afspiller' },
+  { key: 'media',   name: 'MEDIA',   url: 'https://media.eventday.dk',   desc: 'Billeder og video fra jobs' },
+  { key: 'venue',   name: 'VENUE',   url: 'https://venue.eventday.dk',   desc: 'Lokationer og spaces' },
+  { key: 'games',   name: 'GAMES',   url: 'https://games.eventday.dk',   desc: 'Spil og aktiviteter' },
+  { key: 'learn',   name: 'LEARN',   url: 'https://learn.eventday.dk',   desc: 'Tr\u00e6ning og kurser' },
+  { key: 'gear',    name: 'GEAR',    url: 'https://gear.eventday.dk',    desc: 'Udstyr og grej' },
+  { key: 'welcome', name: 'WELCOME', url: 'https://welcome.eventday.dk', desc: 'Onboarding for nye' },
 ];
 
 const TOOLBOX_CACHE_KEY = 'my_toolbox_sites';

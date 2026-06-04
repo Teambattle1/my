@@ -143,6 +143,7 @@ export default function Toolbox({ onOpenMy }: ToolboxProps) {
             <ModuleTile
               key={m.key}
               name={m.name}
+              desc={m.desc}
               icon={icons[m.key]}
               onClick={() => openModule(m.key, m.url)}
             />
@@ -153,7 +154,7 @@ export default function Toolbox({ onOpenMy }: ToolboxProps) {
   );
 }
 
-function ModuleTile({ name, icon, onClick }: { name: string; icon?: string; onClick: () => void }) {
+function ModuleTile({ name, desc, icon, onClick }: { name: string; desc: string; icon?: string; onClick: () => void }) {
   return (
     <button
       className="tb-tile"
@@ -197,15 +198,26 @@ function ModuleTile({ name, icon, onClick }: { name: string; icon?: string; onCl
           {name.slice(0, 2)}
         </div>
       )}
-      <span style={{
-        fontSize: 14,
-        fontWeight: 800,
-        color: '#ffffff',
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-      }}>
-        {name}
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <span style={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: '#ffffff',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+        }}>
+          {name}
+        </span>
+        <span style={{
+          fontSize: 11,
+          fontWeight: 500,
+          color: '#94a3b8',
+          lineHeight: 1.3,
+          textAlign: 'center',
+        }}>
+          {desc}
+        </span>
+      </div>
     </button>
   );
 }
